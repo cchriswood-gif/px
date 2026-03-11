@@ -1,0 +1,3211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project X — Municipal Bond Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-base:#0d1117;
+    --bg-surface:#131920;
+    --bg-raised:#181f2a;
+    --bg-hover:#1d2535;
+    --border-subtle:#1e2d42;
+    --border-mid:#253650;
+    --border-bright:#243650;
+    --text-primary:#e8f2ff;
+    --text-secondary:#c0d8f0;
+    --text-muted:#8aaec8;
+    --text-dim:#3d607d;
+    --accent-blue:#3b9edd;
+    --accent-blue-dim:rgba(59,158,221,0.12);
+    --accent-green:#34d399;
+    --accent-green-dim:rgba(52,211,153,0.12);
+    --accent-red:#f87171;
+    --accent-red-dim:rgba(248,113,113,0.12);
+    --accent-amber:#f59e0b;
+    --accent-amber-dim:rgba(245,158,11,0.12);
+    --accent-purple:#a78bfa;
+    --accent-purple-dim:rgba(167,139,250,0.12);
+    --font-mono:'IBM Plex Mono',monospace;
+    --font-sans:'IBM Plex Sans',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:var(--font-mono);background:var(--bg-base);color:var(--text-primary);min-height:100vh;}
+
+  /* ── HEADER ── */
+  header{
+    background:var(--bg-surface);
+    border-bottom:1px solid var(--border-mid);
+    padding:0 28px;
+    display:flex;align-items:center;justify-content:space-between;
+    height:52px;
+    position:relative;
+  }
+  header::after{
+    content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
+    background:linear-gradient(90deg,transparent,var(--accent-blue),transparent);
+    opacity:0.4;
+  }
+  .logo-wrap{display:flex;align-items:center;gap:14px;}
+  .logo{
+    font-family:var(--font-sans);
+    font-weight:700;font-size:15px;letter-spacing:5px;
+    color:var(--text-primary);text-transform:uppercase;
+  }
+  .logo span{color:var(--accent-blue);}
+  .logo-divider{width:1px;height:18px;background:var(--border-bright);}
+  .subtitle{font-size:9px;color:var(--text-muted);letter-spacing:3px;text-transform:uppercase;font-family:var(--font-sans);}
+  .header-right{text-align:right;font-size:9px;line-height:1.8;font-family:var(--font-sans);}
+  .header-right .stale{color:var(--accent-amber);font-weight:600;letter-spacing:1px;}
+  .header-right .mmd-tag{color:var(--text-muted);letter-spacing:1px;}
+
+  /* ── NAV ── */
+  nav{
+    background:var(--bg-surface);
+    border-bottom:1px solid var(--border-subtle);
+    padding:0 28px;display:flex;gap:2px;
+  }
+  .tab{
+    background:none;border:none;
+    border-bottom:2px solid transparent;
+    color:var(--text-muted);
+    padding:12px 16px;
+    font-weight:600;font-size:10px;letter-spacing:2px;
+    cursor:pointer;
+    font-family:var(--font-sans);
+    text-transform:uppercase;
+    transition:color 0.15s,border-color 0.15s;
+  }
+  .tab:hover{color:var(--text-secondary);}
+  .tab.active{border-bottom-color:var(--accent-blue);color:var(--accent-blue);}
+  #best-ideas-tab{color:var(--accent-amber);border-bottom-color:transparent;}
+  #best-ideas-tab.active{color:var(--accent-amber);border-bottom-color:var(--accent-amber);}
+
+  /* ── LAYOUT ── */
+  main{padding:24px 28px;}
+  .panel{display:none;}
+  .panel.active{display:block;}
+
+  /* ── FORM ELEMENTS ── */
+  .slabel{font-size:9px;color:var(--text-muted);letter-spacing:2px;display:block;margin-bottom:8px;font-family:var(--font-sans);text-transform:uppercase;font-weight:600;}
+  textarea,input,select{
+    width:100%;
+    background:var(--bg-raised);
+    border:1px solid var(--border-mid);
+    border-radius:5px;
+    color:var(--text-primary);
+    padding:10px 14px;
+    font-size:11px;
+    font-family:var(--font-mono);
+    outline:none;
+    transition:border-color 0.15s;
+  }
+  textarea:focus,input:focus{border-color:var(--border-bright);}
+  textarea{resize:vertical;}
+
+  /* ── BUTTONS ── */
+  .btn-row{display:flex;gap:8px;margin-top:10px;margin-bottom:18px;align-items:center;flex-wrap:wrap;}
+  button{
+    border:none;border-radius:4px;
+    padding:8px 18px;
+    font-weight:600;font-size:10px;
+    cursor:pointer;
+    font-family:var(--font-sans);
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+    transition:opacity 0.15s,transform 0.1s;
+  }
+  button:active{transform:scale(0.98);}
+  .btn-primary{background:var(--accent-blue);color:#fff;letter-spacing:2px;}
+  .btn-primary:hover{opacity:0.88;}
+  .btn-danger{background:rgba(248,113,113,0.1);color:var(--accent-red);border:1px solid rgba(248,113,113,0.25);font-size:10px;}
+  .btn-danger:hover{background:rgba(248,113,113,0.18);}
+  .btn-secondary{background:var(--bg-raised);color:var(--text-secondary);border:1px solid var(--border-mid);font-size:10px;}
+  .btn-debug{background:rgba(52,211,153,0.08);color:var(--accent-green);border:1px solid rgba(52,211,153,0.2);font-size:10px;}
+  .btn-comp{background:var(--accent-amber-dim);color:var(--accent-amber);border:1px solid rgba(245,158,11,0.25);font-size:10px;padding:3px 9px;border-radius:3px;cursor:pointer;font-weight:700;font-family:var(--font-mono);}
+  .btn-remove{background:none;border:none;color:var(--text-dim);font-size:13px;cursor:pointer;padding:2px 6px;transition:color 0.15s;}
+  .btn-remove:hover{color:var(--accent-red);}
+  .btn-edit{background:none;border:none;color:var(--text-dim);font-size:11px;cursor:pointer;padding:2px 4px;transition:color 0.15s;}
+  .btn-edit:hover{color:var(--accent-amber);}
+  .btn-add-rtg{background:var(--accent-amber-dim);color:var(--accent-amber);border:1px solid rgba(245,158,11,0.25);font-size:10px;padding:3px 9px;border-radius:3px;cursor:pointer;font-weight:700;font-family:var(--font-mono);}
+
+  /* ── DEBUG/INFO BOXES ── */
+  .debug-box{background:#04080f;border:1px solid rgba(52,211,153,0.2);border-radius:5px;padding:12px;font-size:10px;color:var(--accent-green);overflow:auto;max-height:180px;margin-bottom:16px;white-space:pre-wrap;word-break:break-all;display:none;}
+  .error-box{color:var(--accent-red);font-size:11px;margin-bottom:12px;padding:10px 14px;background:rgba(248,113,113,0.06);border-radius:5px;border:1px solid rgba(248,113,113,0.18);display:none;font-family:var(--font-sans);}
+  .info-box{color:var(--accent-blue);font-size:11px;margin-bottom:12px;padding:8px 14px;background:var(--accent-blue-dim);border-radius:5px;border:1px solid rgba(59,158,221,0.18);display:none;font-family:var(--font-sans);}
+
+  /* ── TABLE ── */
+  .table-wrap{overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 220px);border-radius:7px;border:1px solid var(--border-mid);margin-top:2px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  thead th{background:var(--bg-raised);position:sticky;top:0;z-index:2;}
+  .color-wrap{cursor:help;}
+  .color-wrap[title]:hover::after{content:attr(title);position:absolute;left:0;top:100%;background:#0d1f2d;border:1px solid var(--border-bright);color:#e2e8f0;padding:6px 10px;border-radius:5px;font-size:11px;white-space:nowrap;z-index:100;max-width:400px;white-space:normal;pointer-events:none;}
+  .color-wrap{position:relative;}
+  th{
+    padding:10px 12px;
+    border-bottom:1px solid var(--border-mid);
+    color:var(--text-secondary);
+    font-weight:700;font-size:10px;
+    text-transform:uppercase;letter-spacing:1.5px;
+    white-space:nowrap;cursor:pointer;user-select:none;text-align:left;
+    font-family:var(--font-sans);
+    transition:color 0.15s;
+  }
+  th:hover{color:var(--text-primary);}
+  th.no-sort{cursor:default;}
+  th.no-sort:hover{color:var(--text-secondary);}
+  th.hcol{color:#9d7fe0;}
+  th.ccol{color:#d4a017;}
+  td{padding:11px 12px;border-bottom:1px solid var(--border-subtle);white-space:nowrap;font-size:13px;}
+  tr:nth-child(even) td{background:rgba(255,255,255,0.012);}
+  tr:nth-child(odd) td{background:transparent;}
+  tr:hover td{background:var(--bg-hover)!important;transition:background 0.1s;}
+  tr.new-row td{animation:flashNew 2.5s ease-out;}
+  tr.updated-row td{animation:flashUpdated 2.5s ease-out;}
+  @keyframes flashUpdated{0%{background:rgba(251,191,36,0.25);}100%{background:transparent;}}
+  @keyframes flashNew{0%{background:rgba(52,211,153,0.08);}100%{background:inherit;}}
+
+  /* ── TABLE DATA ── */
+  .cusip{color:var(--accent-blue);font-weight:600;font-size:13px;letter-spacing:0.5px;}
+  .issuer-cell{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;color:var(--text-primary);font-family:var(--font-sans);font-size:13px;}
+  .spread-pos{color:var(--accent-green);font-weight:700;font-size:14px;}
+  .spread-neg{color:var(--accent-red);font-weight:700;font-size:14px;}
+  .time-cell{color:var(--text-muted);font-size:10px;}
+
+  /* ── BADGES ── */
+  .badge{padding:3px 10px;border-radius:3px;font-weight:700;font-size:10px;letter-spacing:1.5px;font-family:var(--font-sans);}
+  .badge-cheap{background:rgba(52,211,153,0.12);color:var(--accent-green);border:1px solid rgba(52,211,153,0.25);}
+  .badge-rich{background:rgba(248,113,113,0.12);color:var(--accent-red);border:1px solid rgba(248,113,113,0.25);}
+  .badge-fair{background:rgba(245,158,11,0.12);color:var(--accent-amber);border:1px solid rgba(245,158,11,0.25);}
+  .badge-nr{background:rgba(106,143,173,0.1);color:var(--text-secondary);}
+  .badge-tax{background:rgba(167,139,250,0.12);color:var(--accent-purple);border:1px solid rgba(167,139,250,0.25);}
+
+  /* ── DIVIDERS ── */
+  .hist-val{color:var(--accent-purple);font-weight:600;}
+  .hist-na{color:var(--text-muted);}
+  .hist-divider{border-left:1px solid #1a2840!important;}
+  .comp-divider{border-left:1px solid #2a1e00!important;}
+  .comp-val{color:var(--accent-amber);font-weight:600;}
+
+  /* ── STATS BAR ── */
+  .stats-bar{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;}
+  .stat{
+    background:var(--bg-raised);
+    border:1px solid var(--border-mid);
+    border-radius:6px;
+    padding:12px 20px;
+    display:flex;align-items:center;gap:12px;
+    position:relative;overflow:hidden;
+  }
+  .stat::before{
+    content:'';position:absolute;top:0;left:0;right:0;height:2px;
+    background:linear-gradient(90deg,transparent,var(--accent-blue),transparent);
+    opacity:0.3;
+  }
+  .stat-val{font-size:24px;font-weight:700;color:var(--accent-blue);font-family:var(--font-sans);line-height:1;}
+  .stat-lbl{color:var(--text-muted);font-size:9px;font-weight:600;letter-spacing:2px;text-transform:uppercase;font-family:var(--font-sans);margin-top:3px;}
+
+  /* ── MMD / SETTINGS GRIDS ── */
+  .mmd-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:16px;}
+  .mmd-cell{background:var(--bg-raised);border:1px solid var(--border-subtle);border-radius:4px;padding:7px 10px;display:flex;justify-content:space-between;align-items:center;}
+  .mmd-yr{color:var(--text-muted);font-size:10px;font-weight:600;font-family:var(--font-sans);}
+  .mmd-rate{color:var(--text-primary);font-weight:600;font-size:13px;}
+  .rtg-table{width:100%;border-collapse:collapse;margin-top:16px;font-size:13px;}
+  .rtg-table th{padding:8px 12px;border-bottom:1px solid var(--border-mid);color:var(--text-muted);font-size:11px;text-align:left;font-weight:600;letter-spacing:1.5px;font-family:var(--font-sans);}
+  .rtg-table td{padding:8px 12px;border-bottom:1px solid var(--border-subtle);}
+  .rtg-table tr:nth-child(even) td{background:rgba(255,255,255,0.012);}
+
+  /* ── DROP ZONE ── */
+  .drop-zone{border:1px dashed var(--border-mid);border-radius:7px;padding:32px;text-align:center;cursor:pointer;transition:border-color 0.2s,background 0.2s;margin-bottom:12px;}
+  .drop-zone:hover,.drop-zone.dragover{border-color:var(--accent-blue);background:var(--accent-blue-dim);}
+  .drop-label{color:var(--text-secondary);font-size:11px;letter-spacing:1px;font-family:var(--font-sans);}
+  .drop-sub{color:var(--text-muted);font-size:10px;margin-top:6px;font-family:var(--font-sans);}
+  .loaded-box{background:var(--bg-raised);border:1px solid var(--border-subtle);border-radius:6px;padding:10px 14px;font-size:10px;margin-top:8px;max-height:220px;overflow-y:auto;}
+  .loaded-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border-subtle);}
+  .loaded-row:last-child{border-bottom:none;}
+
+  /* ── MODAL ── */
+  .modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:100;align-items:center;justify-content:center;backdrop-filter:blur(3px);}
+  .modal-overlay.show{display:flex;}
+  .modal{background:var(--bg-surface);border:1px solid var(--border-bright);border-radius:8px;padding:26px;width:740px;max-width:96vw;max-height:85vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,0.7);}
+  .modal-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--border-subtle);}
+  .modal-title{color:var(--accent-amber);font-size:12px;font-weight:700;letter-spacing:2px;font-family:var(--font-sans);text-transform:uppercase;}
+  .modal-close{background:none;border:none;color:var(--text-secondary);font-size:18px;cursor:pointer;padding:0;transition:color 0.15s;}
+  .modal-close:hover{color:var(--text-primary);}
+  .comp-table{width:100%;border-collapse:collapse;font-size:13px;}
+  .comp-table th{padding:7px 10px;border-bottom:1px solid var(--border-mid);color:var(--text-muted);font-size:11px;text-align:left;font-weight:600;letter-spacing:1.5px;font-family:var(--font-sans);}
+  .comp-table td{padding:7px 10px;border-bottom:1px solid var(--border-subtle);}
+  .comp-table tr:nth-child(even) td{background:rgba(255,255,255,0.012);}
+  .section-divider{border:none;border-top:1px solid var(--border-subtle);margin:20px 0;}
+
+  /* ── MISC ── */
+  footer{padding:10px 28px;border-top:1px solid var(--border-subtle);font-size:9px;color:var(--text-dim);letter-spacing:1px;text-align:center;margin-top:40px;font-family:var(--font-sans);}
+  .count{font-size:10px;color:var(--text-muted);font-family:var(--font-sans);}
+  .pill{display:inline-block;padding:2px 7px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:1px;margin-left:4px;font-family:var(--font-sans);}
+  .pill-cheap{background:rgba(52,211,153,0.15);color:var(--accent-green);}
+  .pill-rich{background:rgba(248,113,113,0.15);color:var(--accent-red);}
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar{width:5px;height:5px;}
+  ::-webkit-scrollbar-track{background:var(--bg-base);}
+  ::-webkit-scrollbar-thumb{background:var(--border-bright);border-radius:3px;}
+  ::-webkit-scrollbar-thumb:hover{background:var(--text-muted);}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<header>
+  <div class="logo-wrap">
+    <span class="logo">PROJECT <span>X</span></span>
+    <div class="logo-divider"></div>
+    <span class="subtitle">Municipal Bond Analyzer</span>
+  </div>
+  <div class="header-right">
+    <div class="stale">⚡ TSY FALLBACK 3/3/26</div>
+    <div class="mmd-tag" id="mmd-date-hdr">MMD 3/3/26</div>
+  </div>
+</header>
+
+<nav>
+  <button class="tab active" onclick="switchTab('analyzer',this)">Analyzer</button>
+  <button class="tab" onclick="switchTab('emma',this)">EMMA History</button>
+  <button class="tab" onclick="switchTab('comps',this)">Market Comps</button>
+  <button class="tab" onclick="switchTab('imgr',this)">IMGR Offerings</button>
+  <button class="tab" id="best-ideas-tab" onclick="switchTab('bestideas',this)">⭐ Best Ideas</button>
+  <button class="tab" onclick="switchTab('mmd',this)">Update MMD</button>
+  <button class="tab" onclick="switchTab('ratings',this)">Ratings</button>
+</nav>
+
+<main>
+
+  <!-- ── ANALYZER ── -->
+  <div id="tab-analyzer" class="panel active">
+    <label class="slabel">PASTE BLOOMBERG MSG OR RUN — BONDS APPEND TO LIST</label>
+    <textarea id="paste-input" rows="4" placeholder="5575m @ 3.00 VA *VIRGINIA BEACH-A 5.000 08/01/38   9277342G7&#10;Paste single MSG or full run"></textarea>
+    <div class="btn-row">
+      <button class="btn-primary" onclick="analyze()">▶ ADD TO LIST</button>
+      <button class="btn-danger" onclick="clearAll()">✕ CLEAR ALL</button>
+      <button class="btn-secondary" onclick="recalcAll()" title="Recalculate sector, rating, spread, R/C on all bonds">↺ RECALC</button>
+      <button class="btn-debug" onclick="toggleDebug()">DEBUG</button>
+      <span class="count" id="bond-count"></span>
+    </div>
+    <pre class="debug-box" id="debug-box"></pre>
+    <div class="error-box" id="error-box">⚠ Could not parse. See DEBUG panel above.</div>
+    <div class="info-box" id="info-box"></div>
+    <div id="stats-section" style="display:none;"><div class="stats-bar" id="stats-bar"></div></div>
+    <div class="table-wrap" id="table-wrap" style="display:none;">
+      <table>
+        <thead>
+          <tr>
+            <th class="no-sort"></th>
+            <th onclick="sortBy('time')">TIME</th>
+            <th onclick="sortBy('cusip')">CUSIP</th>
+            <th onclick="sortBy('issuer')">ISSUER</th>
+            <th onclick="sortBy('size')">SZ(M)</th>
+            <th onclick="sortBy('rating')">RTG</th>
+            <th onclick="sortBy('cpn')">CPN</th>
+            <th onclick="sortBy('matYear')">MAT</th>
+            <th onclick="sortBy('callYear')">CALL</th>
+            <th onclick="sortBy('sector')">SECTOR</th>
+            <th onclick="sortBy('ytw')">YTW</th>
+            <th onclick="sortBy('mmdVal')">MMD</th>
+            <th onclick="sortBy('spread')">SPRD</th>
+            <th onclick="sortBy('ratio')">MNI/TSY</th>
+            <th onclick="sortBy('rcLabel')">CHEAP/RICH</th>
+            <th class="ccol">BVAL R/C</th>
+            <th class="ccol comp-divider no-sort">COMPS</th>
+            <th class="ccol" onclick="sortBy('compDiff')">COMP R/C</th>
+          </tr>
+        </thead>
+        <tbody id="bond-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── EMMA HISTORY (per CUSIP) ── -->
+  <div id="tab-emma" class="panel">
+    <label class="slabel">UPLOAD EMMA TRADE HISTORY CSV (PER CUSIP)</label>
+    <p style="font-size:11px;color:#4a7fa5;margin-bottom:14px;line-height:1.8;">
+      On <strong style="color:#38bdf8;">emma.msrb.org</strong> search a CUSIP → Trade Data tab → Download CSV.<br>
+      Upload here — 52-week spread history appears inline in the Analyzer.
+    </p>
+    <div class="drop-zone" id="emma-drop" onclick="document.getElementById('emma-file').click()" ondragover="dOver(event,'emma-drop')" ondragleave="dLeave('emma-drop')" ondrop="dDrop(event,'emma-file-cb')">
+      <div class="drop-label">📁 CLICK OR DRAG & DROP EMMA CUSIP CSV FILES</div>
+      <div class="drop-sub">One or multiple files · matched by CUSIP automatically</div>
+    </div>
+    <input type="file" id="emma-file" accept=".csv" multiple style="display:none;" onchange="loadEmmaCusip(event)">
+    <div id="emma-msg" style="font-size:11px;color:#4ade80;margin-top:8px;display:none;"></div>
+    <hr class="section-divider">
+    <label class="slabel">LOADED — <span id="emma-count">0 CUSIPs</span></label>
+    <div id="emma-list" class="loaded-box" style="display:none;"></div>
+  </div>
+
+  <!-- ── MARKET COMPS (bulk daily trade file) ── -->
+  <div id="tab-comps" class="panel">
+    <label class="slabel">UPLOAD EMMA BULK TRADE FILE — MARKET COMPS</label>
+    <p style="font-size:11px;color:#4a7fa5;margin-bottom:14px;line-height:1.9;">
+      On Bloomberg: <strong style="color:#38bdf8;">MOSB&lt;GO&gt;</strong> → set date filter → export to Excel/CSV → upload here.<br>
+      Or use EMMA: <strong style="color:#38bdf8;">emma.msrb.org/TradeData/Search</strong> → set date + par filter → export CSV.<br>
+      Project X auto-detects both formats.
+    </p>
+    <div class="drop-zone" id="comp-drop" onclick="document.getElementById('comp-file').click()" ondragover="dOver(event,'comp-drop')" ondragleave="dLeave('comp-drop')" ondrop="dDrop(event,'comp-file-cb')">
+      <div class="drop-label">📁 CLICK OR DRAG & DROP BLOOMBERG MOSB EXPORT</div>
+      <div class="drop-sub">Accepts .xlsx or .csv · auto-detects format · also accepts EMMA CSV</div>
+    </div>
+    <input type="file" id="comp-file" accept=".csv,.xlsx,.xls" style="display:none;" onchange="loadBulkTrades(event)">
+    <div id="comp-msg" style="font-size:11px;color:#4ade80;margin-top:8px;display:none;"></div>
+    <hr class="section-divider">
+
+    <div id="comp-summary" style="display:none;">
+      <label class="slabel">LOADED TRADE DATABASE</label>
+      <div id="comp-summary-content" class="loaded-box"></div>
+    </div>
+
+    <hr class="section-divider">
+    <div style="font-size:10px;color:#1e3a5f;line-height:2.2;">
+      <div style="color:#f59e0b;font-weight:700;margin-bottom:6px;letter-spacing:1px;">HOW TO DOWNLOAD FROM BLOOMBERG MOSB</div>
+      <div>1. Type <span style="color:#38bdf8;">MOSB&lt;GO&gt;</span> on Bloomberg</div>
+      <div>2. Set date filter to yesterday (or today for intraday)</div>
+      <div>3. Filter par amount ≥ $100k to remove retail noise</div>
+      <div>4. Hit <span style="color:#38bdf8;">Export</span> → save as Excel or CSV</div>
+      <div>5. Upload that file here — Project X handles the rest</div>
+      <div style="margin-top:8px;color:#4a7fa5;">Also accepts EMMA CSV format · Comp matching: maturity ±3yr · yield ±0.10–0.35% by rating · rating ±1 tier</div>
+    </div>
+  </div>
+
+  <!-- ── IMGR OFFERINGS ── -->
+  <div id="tab-imgr" class="panel">
+    <label class="slabel">IMGR OFFERINGS FEED</label>
+    <p style="font-size:11px;color:#4a7fa5;margin-bottom:14px;line-height:1.9;">
+      Export from IMGR → paste or upload tab-delimited file here.<br>
+      Columns detected: <strong style="color:#38bdf8;">CUSIP · Short Name · State · Coupon · Maturity · Ask Yield · Ask Price · Ask Size · Ask Spread · S&P · Moody's · Call Date · Industry</strong>
+    </p>
+    <div class="drop-zone" id="imgr-drop" onclick="document.getElementById('imgr-file').click()" ondragover="dOver(event,'imgr-drop')" ondragleave="dLeave('imgr-drop')" ondrop="dDropImgr(event)">
+      <div class="drop-label">📁 CLICK OR DRAG & DROP IMGR EXPORT (.tsv / .csv / .txt)</div>
+      <div class="drop-sub">Tab-delimited · auto-detects header row · adds to analyzer</div>
+    </div>
+    <input type="file" id="imgr-file" accept=".csv,.tsv,.txt,.xlsx,.xls" style="display:none;" onchange="loadImgrFile(event)">
+    <div style="margin-top:12px;">
+      <label class="slabel" style="margin-bottom:6px;">OR PASTE IMGR DATA</label>
+      <textarea id="imgr-paste" rows="6" placeholder="Paste tab-delimited IMGR export here (include header row)..."></textarea>
+      <div class="btn-row" style="margin-top:8px;">
+        <button class="btn-primary" onclick="parseImgrPaste()">PARSE &amp; ADD TO ANALYZER</button>
+        <button class="btn-secondary" onclick="document.getElementById('imgr-paste').value=''">CLEAR</button>
+      </div>
+    </div>
+    <div id="imgr-msg" style="font-size:11px;color:#4ade80;margin-top:10px;display:none;"></div>
+    <div id="imgr-summary" style="display:none;margin-top:12px;">
+      <label class="slabel">LAST LOAD</label>
+      <div id="imgr-summary-content" class="loaded-box"></div>
+    </div>
+  </div>
+
+  <!-- ── MMD ── -->
+  <div id="tab-bestideas" class="panel">
+    <label class="slabel">BEST IDEAS — CHEAP ON BOTH BANDS &amp; COMPS</label>
+    <p style="font-size:11px;color:#4a7fa5;margin-bottom:12px;">Bonds where sector bands = CHEAP and comp universe = CHEAP. Strongest buy signal. BVAL R/C shown when curves loaded.</p>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+      <div id="best-ideas-count" style="font-size:11px;color:#4ade80;"></div>
+      <button class="btn-secondary" onclick="exportBestIdeas()" style="font-size:10px;padding:4px 12px;">⬇ EXPORT CSV</button>
+    </div>
+    <div id="best-ideas-table"></div>
+  </div>
+  <div id="tab-mmd" class="panel">
+    <label class="slabel">UPDATE MMD CURVE</label>
+    <input id="mmd-date-input" placeholder="Date (e.g. 3/4/26)" style="margin-bottom:8px;height:36px;">
+    <textarea id="mmd-text" rows="6" placeholder="2036 2.75&#10;2044 3.70&#10;2045 3.85"></textarea>
+    <div class="btn-row"><button class="btn-primary" onclick="applyMMD()">APPLY</button></div>
+    <div id="mmd-confirm" style="display:none;color:#4ade80;font-size:11px;margin-top:6px;"></div>
+    <hr class="section-divider" style="margin:16px 0;">
+    <label class="slabel">UPDATE TREASURY CURVE</label>
+    <p style="font-size:11px;color:#4a7fa5;margin-bottom:8px;">Paste Bloomberg govie screen (GBBT&lt;GO&gt; or IYC) — auto-extracts yields.</p>
+    <textarea id="tsy-paste" rows="6" placeholder="Paste Bloomberg treasury screen here..."></textarea>
+    <div class="btn-row" style="margin-top:8px;">
+      <button class="btn-primary" onclick="applyTsy()">APPLY TSY</button>
+      <button class="btn-secondary" onclick="document.getElementById('tsy-paste').value=''">CLEAR</button>
+    </div>
+    <div id="tsy-msg" style="font-size:11px;color:#4ade80;margin-top:6px;display:none;"></div>
+    <div id="tsy-current" style="margin-top:10px;font-size:11px;color:#4a7fa5;"></div>
+    <hr class="section-divider" style="margin:16px 0;">
+    <label class="slabel">UPDATE BVAL SECTOR CURVES</label>
+    <p style="font-size:11px;color:#4a7fa5;margin-bottom:8px;">Paste output from BQNT sector curve script. Updates live BVAL fair value for R/C third signal.</p>
+    <textarea id="bval-paste" rows="8" placeholder="=== BVAL SECTOR CURVES ===&#10;Date: 03/11/26&#10;go_AA: 1:2.118,2:2.119,3:2.126...&#10;hosp_AA: 1:2.45,2:2.46...&#10;=== END ==="></textarea>
+    <div class="btn-row" style="margin-top:8px;">
+      <button class="btn-primary" onclick="applyBval()">APPLY BVAL</button>
+      <button class="btn-secondary" onclick="document.getElementById('bval-paste').value=''">CLEAR</button>
+    </div>
+    <div id="bval-msg" style="font-size:11px;color:#4ade80;margin-top:6px;display:none;"></div>
+    <div id="bval-status" style="font-size:11px;color:#4a7fa5;margin-top:6px;"></div>
+    <hr class="section-divider" style="margin:16px 0;">
+    <label class="slabel" style="margin-top:8px;">CURRENT CURVE — <span id="mmd-curve-date">3/3/26</span></label>
+    <div class="mmd-grid" id="mmd-grid"></div>
+  </div>
+
+  <!-- ── RATINGS ── -->
+  <div id="tab-ratings" class="panel">
+    <label class="slabel">ADD ISSUER RATING</label>
+    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;">
+      <div style="flex:2;"><label class="slabel" style="margin-bottom:4px;">ISSUER KEYWORD</label>
+        <input id="new-issuer" placeholder="e.g. VIRGINIA BEACH" style="height:36px;"></div>
+      <div style="flex:1;min-width:120px;"><label class="slabel" style="margin-bottom:4px;">RATING</label>
+        <select id="new-rating" style="height:36px;">
+          <option value="">-- select --</option>
+          <option>Aaa</option><option>Aa1</option><option>Aa2</option><option>Aa3</option>
+          <option>A1</option><option>A2</option><option>A3</option>
+          <option>AAA</option><option>AA+</option><option>AA</option><option>AA-</option>
+          <option>A+</option><option>A</option><option>A-</option><option>NR</option>
+        </select></div>
+      <button class="btn-primary" onclick="addRating()" style="height:36px;">+ ADD</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;">
+      <button class="btn-secondary" onclick="exportRatings()" style="font-size:10px;padding:6px 14px;">⬇ EXPORT RATINGS</button>
+      <label class="btn-secondary" style="font-size:10px;padding:6px 14px;cursor:pointer;margin:0;">⬆ IMPORT RATINGS<input type="file" accept=".json" style="display:none;" onchange="importRatings(event)"></label>
+      <span id="ratings-save-msg" style="font-size:10px;color:#4ade80;display:none;">✓ Saved</span>
+    </div>
+    <table class="rtg-table">
+      <thead><tr><th>ISSUER KEYWORD</th><th>RATING</th><th>FAIR BAND (BPS TO MMD)</th><th></th></tr></thead>
+      <tbody id="rating-tbody"></tbody>
+    </table>
+  </div>
+
+</main>
+
+<!-- ── COMPS MODAL ── -->
+<div class="modal-overlay" id="comp-modal">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div class="modal-title" id="modal-title">MARKET COMPS</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<footer>PROJECT X · INTERNAL USE ONLY · TSY FALLBACK 3/3/26 · MMD MANUALLY UPDATED</footer>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// CONSTANTS
+// ─────────────────────────────────────────────────────────────────────────────
+const DEFAULT_MMD={2027:2.12,2028:2.13,2029:2.17,2030:2.20,2031:2.25,2032:2.33,2033:2.41,2034:2.48,2035:2.58,2036:2.67,2037:2.79,2038:2.92,2039:3.04,2040:3.13,2041:3.23,2042:3.35,2043:3.49,2044:3.63,2045:3.78,2046:3.92,2047:4.01,2048:4.068,2049:4.096,2050:4.113,2051:4.141,2052:4.169,2053:4.187,2054:4.204,2055:4.222,2056:4.17};
+let FALLBACK_TSY={1:3.55,2:3.55,3:3.70,5:3.57,7:4.10,10:3.89,20:4.50,30:4.72};
+const RATING_BANDS={"Aaa":[-5,8],"AAA":[-5,8],"Aa1":[5,18],"AA+":[5,18],"Aa2":[10,25],"AA":[10,25],"Aa3":[18,35],"AA-":[18,35],"A1":[28,48],"A+":[28,48],"A2":[38,58],"A":[38,58],"A3":[48,68],"A-":[48,68],"Baa1":[70,110],"BBB+":[70,110],"Baa2":[90,140],"BBB":[90,140],"Baa3":[110,160],"BBB-":[110,160],"NR":[60,110]};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────────────────────
+let mmd={...DEFAULT_MMD}, mmdDate="3/9/26";
+let bonds=[];
+let emmaHistory={};   // cusip -> {hiYield,loYield,avgYield,lastDate,lastYield,tradeCount}
+let bulkTrades=[];    // [{cusip,desc,cpn,matYear,matDate,yield,date,par}]
+let bulkTradeDate="";
+let sortCol=null, sortDir=1, debugVisible=false;
+let newCusips=new Set();
+
+let issuerRatings=[
+  {keyword:"VIRGINIA BEACH",rating:"Aaa"},
+  {keyword:"UC CALIFORNIA",rating:"Aa2"},{keyword:"UC CAL",rating:"Aa2"},
+  {keyword:"NYC GO",rating:"Aa2"},{keyword:"NEW YORK CITY",rating:"Aa2"},
+  {keyword:"TRANSITIONAL FIN",rating:"Aa2"},
+  {keyword:"NJ TURNPIKE",rating:"A1"},{keyword:"NEW JERSEY TURNPIKE",rating:"A1"},
+  {keyword:"NEW JERSEY ST TURNPIKE",rating:"A1"},
+  {keyword:"WISCONSIN ST",rating:"Aa2"},{keyword:"CALIFORNIA ST",rating:"Aa2"},
+  {keyword:"NEVADA ST",rating:"Aa1"},{keyword:"TARRANT",rating:"Aa3"},
+  {keyword:"E-470",rating:"Aa3"},{keyword:"TBTA",rating:"AA+"},{keyword:"TRIBOROUGH",rating:"AA+"},
+  {keyword:"WASHINGTON ST",rating:"Aa1"},{keyword:"WASHINGTON ST-",rating:"Aa1"},{keyword:"MASSACHUSETTS ST",rating:"Aa1"},
+  {keyword:"MARYLAND ST",rating:"Aaa"},{keyword:"VIRGINIA ST",rating:"Aaa"},
+  {keyword:"GEORGIA ST",rating:"Aaa"},{keyword:"UTAH ST",rating:"Aaa"},
+  {keyword:"TENNESSEE ST",rating:"Aaa"},{keyword:"NORTH CAROLINA ST",rating:"Aaa"},
+  {keyword:"CONNECTICUT ST",rating:"Aa2"},{keyword:"NEW JERSEY ST",rating:"A2"},
+  {keyword:"ILLINOIS ST",rating:"A3"},{keyword:"PENNSYLVANIA ST",rating:"Aa2"},
+  {keyword:"OHIO ST",rating:"Aa1"},{keyword:"MICHIGAN ST",rating:"Aa1"},
+  {keyword:"MINNESOTA ST",rating:"Aa1"},{keyword:"COLORADO ST",rating:"Aa1"},
+  {keyword:"OREGON ST",rating:"Aa1"},
+  {keyword:"NC HSG FIN",rating:"Aa1"},{keyword:"NORTH CAROLINA HSG",rating:"Aa1"},
+  {keyword:"VERMONT HSG",rating:"Aa1"},{keyword:"VERMONT ST HSG",rating:"Aa1"},
+  {keyword:"PA HSG FIN",rating:"Aa1"},{keyword:"PENNSYLVANIA HSG",rating:"Aa1"},
+  {keyword:"SC ST HSG",rating:"Aaa"},{keyword:"SOUTH CAROLINA ST HSG",rating:"Aaa"},
+  {keyword:"CENTRL PLAINS",rating:"A2"},{keyword:"CENTRAL PLAINS",rating:"A2"},
+  {keyword:"RHODE ISLAND HSG",rating:"Aa1"},{keyword:"RI HSG",rating:"Aa1"},
+  {keyword:"MARYLAND HSG",rating:"Aaa"},{keyword:"MD HSG",rating:"Aaa"},
+  {keyword:"VIRGINIA HSG",rating:"Aa1"},{keyword:"VA HSG",rating:"Aa1"},
+  {keyword:"COLORADO HSG",rating:"Aa1"},{keyword:"ILLINOIS HSG",rating:"Aa2"},
+  {keyword:"CONNECTICUT HSG",rating:"Aa1"},{keyword:"CT HSG",rating:"Aa1"},
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+// Sector add-ons — bps added to both ends of rating band
+const SECTOR_ADDON={
+  housing:       [30,70],
+  cops:          [-10,35],
+  hospital:      [-10,30],
+  airportAMT:    [15,60],  // AMT airports wider than non-AMT
+  airportNonAMT: [0,40],
+  airport:       [0,45],   // fallback if AMT status unknown
+  salesTax:      [5,20],
+  water:         [5,15],
+  univ:          [5,20],
+  toll:          [-5,25],
+  go:            [-15,10], // GOs trade tight
+};
+// Gas prepay CUSIP prefixes and issuer keywords
+const GAS_PREPAY_PREFIXES=['09182T','84136F','29272','59261Q','748148'];
+const GAS_PREPAY_KEYWORDS=['GAS DIST','GAS SUPPLY','PREPAY GAS','ENERGY AUTH','COOPERATIVE DI','BLACKBELT'];
+function isGasPrepayBond(cusip,issuerUpper){
+  if(cusip&&GAS_PREPAY_PREFIXES.some(p=>cusip.toUpperCase().startsWith(p)))return true;
+  if(issuerUpper&&GAS_PREPAY_KEYWORDS.some(k=>issuerUpper.includes(k)))return true;
+  return false;
+}
+// Dynamic gas prepay bands computed from MOSB trades
+let _gasPrepayBands=null;
+function getGasPrepayBand(rating){
+  // Rebuild if bulkTrades changed
+  if(!_gasPrepayBands){
+    const gpTrades=bulkTrades.filter(t=>isGasPrepayBond(t.cusip,t.desc?t.desc.toUpperCase():''));
+    if(gpTrades.length<5){
+      // Fallback placeholder bands until enough data
+      _gasPrepayBands={Aaa:[30,80],Aa:[50,100],A:[60,130],Baa:[80,160]};
+    } else {
+      const byTier={Aaa:[],Aa:[],A:[],Baa:[]};
+      gpTrades.forEach(t=>{
+        if(t.spread==null)return;
+        const tier=ratingTier(t.rating||'');
+        if(byTier[tier])byTier[tier].push(t.spread);
+      });
+      _gasPrepayBands={};
+      for(const [tier,spreads] of Object.entries(byTier)){
+        if(spreads.length<3){_gasPrepayBands[tier]=null;continue;}
+        spreads.sort((a,b)=>a-b);
+        const p25=spreads[Math.floor(spreads.length*0.25)];
+        const p75=spreads[Math.floor(spreads.length*0.75)];
+        _gasPrepayBands[tier]=[p25,p75];
+      }
+    }
+  }
+  const tier=ratingTier(rating||'');
+  return _gasPrepayBands[tier]||null;
+}
+// Invalidate cache when MOSB loads
+function invalidateGasBands(){_gasPrepayBands=null;}
+
+function detectSector(issuer,cusip,taxable,amt){
+  if(!issuer)return null;
+  const u=issuer.toUpperCase();
+  if(isGasPrepayBond(cusip,u))return'gasPrepay';
+  if(/HSG|HOUSING|MORTGAGE|MTG|HFA|HOUS/.test(u))return'housing';
+  if(/COPS|CERT.*PART|LEASE REV|SCH BRD COP/.test(u))return'cops';
+  if(/HOSP|HLTH FACS|HEALTH FAC|HEALTH SYS|MEDICAL CTR|HEALTHCARE|CULTURAL/.test(u))return'hospital';
+  // Airport: split AMT vs non-AMT — different markets
+  // CUSIP-prefix overrides for known airports where short name omits AVIATION
+  const AMT_AIRPORT_CUSIPS=/^(59333P|167593M|045528V|037833|452151|0855491|73358W|29271A|452151|13033H|677522|13033H|452151|73358W|63306T|247361|452151)/;
+  const NOAMT_AIRPORT_CUSIPS=/^(452151)/;
+  if(cusip&&AMT_AIRPORT_CUSIPS.test(cusip))return'airportAMT';
+  if(/ARPT|AIRPORT|AVIATION|AIR AUTH/.test(u)){
+    // Known AMT airports by name, or if amt/taxable flag set
+    const isAMT=(amt||taxable)||/MIAMI.DADE|O.HARE|LAGUARDIA|JFK|LAX|LOS ANGELES|DALLAS.*FORT|DFW|PHOENIX|LOGAN|NEWARK|SFO|SAN FRAN|SEATTLE|ATLANTA|HARTSFIELD|DENVER|HOUSTON|BUSH|HOBBY|CHARLOTTE|MINNEAPOLIS|DETROIT|PHILADELPHIA|PITTSBURGH|ORLANDO|TAMPA|SAN DIEGO|SAN JOSE|PORTLAND|SALT LAKE|MEMPHIS|NASHVILLE|KANSAS CITY|CLEVELAND|CINCINNATI|INDIANAPOLIS|LOUISVILLE|BUFFALO|ALBANY|BRADLEY|BRADLEY CTR|REAGAN|DULLES|BWI|MIDWAY/.test(u);
+    return isAMT?'airportAMT':'airportNonAMT';
+  }
+  if(/SALES TAX|ECON DEV|TOURIST DEV|CONVENTION/.test(u))return'salesTax';
+  if(/WTR|WSTWTR|WASTEWATER|SEWER|WATER|SANIT|SAN DT|SAN DIST|SANITARY/.test(u))return'water';
+  if(/UNIV[^E]|UNIVERSITY|COLLEGE|HIGHER ED|DORM/.test(u))return'univ';
+  if(/TOLL|TURNPIKE|EXPRESSWAY|HWY|TRANSPORTATION|TRANSIT(?!IONAL)|TRUNK LIN|PORT AUTH|BRIDGE|TUNNEL/.test(u))return'toll';
+  // GO: state, county, city, school district
+  if(/\bGO\b|GEN.*OBLIG|GENERAL OBLIG|SCH DIST|ISD|USD|UNIFIED SCH|CITY OF|CTY OF|\bCO\s+GO\b|MUNI\s+UTIL|UTGO|LTGO/.test(u))return'go';
+  if(/ST\s+GO|STATE GO|\bST\b.*\bGO\b/.test(u))return'go';
+  if(/UNIF SD|UNIFIED SD|SCHOOL DIST|SCH BRD|BOARD OF ED/.test(u))return'go';
+  if(/TRANS FIN|TRANSITIONAL FIN|MUNI WATER|MUNI UTIL|NYC MUNI|CITY MUNI/.test(u))return'go';
+  if(/\bTRANSIT\b|METRO TRANSIT|METROPOLITAN TRANSIT|METRO COUNCIL|MET COUNCIL/.test(u))return'toll';
+  if(/NEW YORK CITY.*MUNI|NYC.*MUNI|CITY.*MUNI WATER|MUNI WATER/.test(u))return'water';
+  if(/NEW YORK CITY|NYC\b/.test(u)&&/\bMUNI\b/.test(u))return'water';
+  if(/TRANSPRTN|TRANSPORT AUTH|HIGHWAY|HIGHWAY REV|ROAD DIST/.test(u))return'toll';
+  if(/TRUNK LINE/.test(u))return'toll';
+  if(/MIAMI.DADE|\bCOUNTY\b|\bCNTY\b/.test(u)&&!/AIRPORT|AVIATION|ARPT/.test(u))return'go';
+  if(/DASNY|DORMITORY AUTH|DORM AUTH/.test(u))return'univ';
+  if(/MARICOPA ECD|ECON DEV AUTH|INDL DEV|IDA\b|\bEDA\b/.test(u))return'salesTax';
+  if(/DAVIDSON|NASHVILLE|\bCITY\b.*\bCO\b|\bMETRO\b.*GO/.test(u))return'go';
+  if(/WASHINGTON ST|NEVADA ST|OREGON ST|COLORADO ST|MINNESOTA ST|MICHIGAN ST|OHIO ST|PENNSYLVANIA ST|CONNECTICUT ST|NEW YORK ST|NEW JERSEY ST|CALIFORNIA ST|FLORIDA ST|TEXAS ST|ILLINOIS ST|GEORGIA ST|VIRGINIA ST|MARYLAND ST|NORTH CAROLINA ST|SOUTH CAROLINA ST|TENNESSEE ST|KENTUCKY ST|INDIANA ST|WISCONSIN ST|MISSOURI ST|ARIZONA ST|UTAH ST|IOWA ST|KANSAS ST|ARKANSAS ST|MISSISSIPPI ST|LOUISIANA ST|OKLAHOMA ST|ALABAMA ST|NEBRASKA ST|WEST VIRGINIA ST|IDAHO ST|NEW MEXICO ST|HAWAII ST|MAINE ST|RHODE ISLAND ST|DELAWARE ST|VERMONT ST|NEW HAMPSHIRE ST|MONTANA ST|WYOMING ST|SOUTH DAKOTA ST|NORTH DAKOTA ST|ALASKA ST/.test(u))return'go';
+  if(/\bST\b$/.test(u.trim()))return'go'; // catches 'CONNECTICUT ST' etc
+  if(/\bST\b.*\bREF\b|ST.*UNIV|\bSTATE\b/.test(u)&&!/TRANSIT|TRANSPORT|HOUSING|HOSPITAL/.test(u))return'go';
+  if(/\bNEW YORK\b/.test(u)&&!/CITY|NYC|MUNI|TRANS|WATER/.test(u))return'go';
+  if(/CMWLTH|COMMONWEALTH/.test(u))return'go';
+  if(/DT OF COLUMBIA|DIST OF COLUMBIA|DISTRICT OF COL|\bDC\b/.test(u))return'go';
+  return null;
+}
+const _RR=["Aaa","AAA","Aa1","AA+","Aa2","AA","Aa3","AA-","A1","A+","A2","A","A3","A-","Baa1","BBB+","Baa2","BBB","Baa3","BBB-","NR"];
+function getFairBand(r,issuer,cusip,taxable,amt){
+  if(!r)return null;
+  // Handle combined ratings like "Aa1/AA+" — resolve to best single rating
+  let resolvedR=r;
+  if(r.includes('/')){
+    const parts=r.split('/');
+    const ri=x=>{const i=_RR.indexOf(x);return i===-1?99:i;};
+    resolvedR=parts.reduce((a,b)=>ri(a)<=ri(b)?a:b);
+  }
+  const base=RATING_BANDS[resolvedR];
+  if(!base)return null;
+  const sector=detectSector(issuer,cusip,taxable||false,amt||false);
+  const sectorKey=sector;
+  if(sector==='gasPrepay')return getGasPrepayBand(resolvedR)||base;
+  if(!sector||!SECTOR_ADDON[sector])return base;
+  const addon=SECTOR_ADDON[sector];
+  return[base[0]+addon[0],base[1]+addon[1]];
+}
+function richOrCheap(spread,rating,issuer,cusip,taxable){
+  // issuerRatings seed overrides inline rating for band calc (e.g. NYC GO seeded as Aa2)
+  const seeded=lookupRating(issuer);
+  const effectiveRating=seeded||rating;
+  const band=getFairBand(effectiveRating,issuer,cusip,taxable);
+  if(!band)return{label:"NR",cls:"badge-nr"};
+  if(spread<band[0])return{label:"RICH",cls:"badge-rich"};
+  if(spread>band[1])return{label:"CHEAP",cls:"badge-cheap"};
+  return{label:"FAIR",cls:"badge-fair"};
+}
+function lookupRating(issuer){
+  if(!issuer)return null;
+  const up=issuer.toUpperCase();
+  for(const r of issuerRatings){if(up.includes(r.keyword.toUpperCase()))return r.rating;}
+  return null;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+// BVAL SECTOR CURVES
+// ─────────────────────────────────────────────────────────────────────────────
+let bvalCurves = {}; // e.g. {go_AA: {1:2.118, 2:2.119, ...}, hosp_AA: {...}}
+let bvalDate = null;
+
+// Map Project X sector+rating → BVAL curve key
+function getBvalCurveKey(sector, rating) {
+  if(!sector||!rating) return null;
+  const r = rating.split('/')[0]; // use first rating if combined
+  // Normalize rating to key suffix
+  const rMap = {
+    'Aaa':'AAA','AAA':'AAA',
+    'Aa1':'AAp','AA+':'AAp',
+    'Aa2':'AA', 'AA':'AA',
+    'Aa3':'AAm','AA-':'AAm',
+    'A1':'Ap',  'A+':'Ap',
+    'A2':'A',   'A':'A',
+    'A3':'Am',  'A-':'Am',
+    'Baa1':'BBBp','BBB+':'BBBp',
+    'Baa2':'BBB', 'BBB':'BBB',
+    'Baa3':'BBBm','BBB-':'BBBm',
+  };
+  const rs = rMap[r]||null;
+  if(!rs) return null;
+  // Map sector to curve prefix
+  const sMap = {
+    'GO':'go','go':'go',
+    'Hospital':'hosp','hospital':'hosp',
+    'Water':'water','water':'water',
+    'Housing':'housing','housing':'housing',
+    'Transport':'toll','toll':'toll',
+    'Higher Ed':'univ','univ':'univ',
+    'Airport AMT':'airportAMT','airportAMT':'airportAMT',
+    'Airport':'airport','airportNonAMT':'airport',
+    // Proxy mappings — no dedicated BVAL curve, use closest sector
+    'Sales Tax':'rev','salesTax':'rev',  // sales tax → general revenue proxy
+    'COPs':'go','cops':'go',            // COPs → GO proxy (lease-backed, similar spread behavior)
+    'Gas Prepay':'rev','gasPrepay':'rev', // gas prepay → revenue proxy
+    // Revenue catch-all
+    'Revenue':'rev','rev':'rev',
+  };
+  const sp = sMap[sector]||null;
+  if(!sp) return null;
+  // Airport AMT: always use composite regardless of rating
+  if(sp==='airportAMT') return 'airportAMT_AA';
+  // Try exact match first, then fall back to adjacent ratings
+  const exact = `${sp}_${rs}`;
+  if(bvalCurves[exact]) return exact;
+  // Fallback chain: try nearby ratings
+  const fallbacks = {
+    'AAA':['AAp','AA','AAm'],
+    'AAp':['AA','AAm','AAA'],
+    'AA': ['AAp','AAm','AAA'],
+    'AAm':['AA','AAp','Am'],
+    'Ap': ['A','AAm','AA'],
+    'A':  ['Ap','Am','AAm'],
+    'Am': ['A','Ap','BBBp'],
+    'BBBp':['BBB','Am','A'],
+    'BBB': ['BBBp','BBBm','Am'],
+    'BBBm':['BBB','BBBp','Am'],
+  };
+  for(const fb of (fallbacks[rs]||[])){
+    const k = `${sp}_${fb}`;
+    if(bvalCurves[k]) return k;
+  }
+  return null;
+}
+
+function interpolateBvalSingle(curveKey, matYear) {
+  if(!curveKey||!bvalCurves[curveKey]) return null;
+  const curve = bvalCurves[curveKey];
+  const yr = matYear - new Date().getFullYear();
+  if(yr <= 0) return null;
+  const keys = Object.keys(curve).map(Number).sort((a,b)=>a-b);
+  if(!keys.length) return null;
+  if(yr <= keys[0]) return curve[keys[0]];
+  if(yr >= keys[keys.length-1]) return curve[keys[keys.length-1]];
+  const lo = Math.max(...keys.filter(k=>k<=yr));
+  const hi = Math.min(...keys.filter(k=>k>=yr));
+  if(lo===hi) return curve[lo];
+  return curve[lo] + (curve[hi]-curve[lo])*(yr-lo)/(hi-lo);
+}
+
+function interpolateBval(curveKey, matYear) {
+  // For airportAMT, average the two main curves (drop AA3/LA which runs wide)
+  if(curveKey && curveKey.startsWith('airportAMT')) {
+    const v1 = interpolateBvalSingle('airportAMT_AA', matYear);
+    const v2 = interpolateBvalSingle('airportAMT_AA2', matYear);
+    if(v1 && v2) return (v1+v2)/2;
+    return v1||v2||null;
+  }
+  return interpolateBvalSingle(curveKey, matYear);
+}
+
+function applyBval() {
+  const text = document.getElementById('bval-paste').value.trim();
+  if(!text) return;
+  const lines = text.split('\n');
+  const parsed = {};
+  let date = null;
+  for(const line of lines) {
+    const trimmed = line.trim();
+    if(trimmed.startsWith('Date:')) { date = trimmed.replace('Date:','').trim(); continue; }
+    if(trimmed.startsWith('===')) continue;
+    const colon = trimmed.indexOf(':');
+    if(colon < 0) continue;
+    const key = trimmed.slice(0,colon).trim();
+    const vals = trimmed.slice(colon+1).trim();
+    const curve = {};
+    for(const part of vals.split(',')) {
+      const [yr, rate] = part.split(':');
+      if(yr && rate) curve[parseFloat(yr)] = parseFloat(rate);
+    }
+    if(Object.keys(curve).length) parsed[key] = curve;
+  }
+  if(!Object.keys(parsed).length) {
+    const msg = document.getElementById('bval-msg');
+    msg.textContent = '⚠ No valid curves parsed'; msg.style.color='var(--accent-red)'; msg.style.display='block';
+    return;
+  }
+  bvalCurves = parsed;
+  bvalDate = date;
+  localStorage.setItem('projectx-bval', JSON.stringify({curves:bvalCurves,date:bvalDate}));
+  // Recompute bvalDiff/bvalLabel on all bonds with new curves
+  if(bonds.length){
+    bonds=bonds.map(b=>{
+      const bv=getBvalSignal(b);
+      return{...b,bvalDiff:bv?bv.diff:null,bvalLabel:bv?bv.label:null};
+    });
+    saveBonds();
+  }
+  if(bonds.length){ renderTable(); updateStats(); }
+  const msg = document.getElementById('bval-msg');
+  msg.textContent = `✓ Loaded ${Object.keys(parsed).length} BVAL curves${date?' ('+date+')':''}`;
+  msg.style.color='var(--accent-green)'; msg.style.display='block';
+  setTimeout(()=>msg.style.display='none', 3000);
+  const status = document.getElementById('bval-status');
+  status.textContent = `BVAL curves: ${Object.keys(parsed).join(', ')}`;
+  document.getElementById('bval-paste').value='';
+  renderTable();
+}
+
+function getBvalSignal(bond) {
+  if(!(bond.sectorKey||bond.sector)||!bond.rating||!bond.ytw||!bond.matYear) return null;
+  if(!Object.keys(bvalCurves).length) return null;
+  const sKey = bond.sectorKey||bond.sector;
+  const key = getBvalCurveKey(sKey, bond.rating);
+  if(!key){
+    console.log(`BVAL no key: cusip=${bond.cusip} sectorKey=${sKey} rating=${bond.rating}`);
+    return null;
+  }
+  const fairYield = interpolateBval(key, bond.matYear);
+  if(!fairYield){
+    console.log(`BVAL no yield: cusip=${bond.cusip} key=${key} matYear=${bond.matYear}`);
+    return null;
+  }
+  const diff = Math.round((bond.ytw - fairYield)*100);
+  return {diff, fairYield, key, label: diff>=8?'CHEAP':diff<=-8?'RICH':'FAIR'};
+}
+
+function getMMD(year){
+  if(mmd[year])return mmd[year];
+  const yrs=Object.keys(mmd).map(Number).sort((a,b)=>a-b);
+  const lo=yrs.filter(y=>y<=year).pop();
+  const hi=yrs.filter(y=>y>=year)[0];
+  if(!lo||!hi)return null;
+  if(lo===hi)return mmd[lo];
+  return +(mmd[lo]+((year-lo)/(hi-lo))*(mmd[hi]-mmd[lo])).toFixed(3);
+}
+function interpolateTsy(yr){
+  const mat=yr-new Date().getFullYear();
+  const bp=[1,2,3,5,7,10,20,30];
+  if(mat<=1)return FALLBACK_TSY[1];
+  if(mat>=30)return FALLBACK_TSY[30];
+  let lo=bp[0],hi=bp[bp.length-1];
+  for(let i=0;i<bp.length-1;i++){if(mat>=bp[i]&&mat<=bp[i+1]){lo=bp[i];hi=bp[i+1];break;}}
+  return FALLBACK_TSY[lo]&&FALLBACK_TSY[hi]?+(FALLBACK_TSY[lo]+((mat-lo)/(hi-lo))*(FALLBACK_TSY[hi]-FALLBACK_TSY[lo])).toFixed(3):null;
+}
+function parseMatYear(s){const p=s.split("/");if(p.length!==3)return null;let y=parseInt(p[2]);if(y<100)y+=2000;return y;}
+function parseDateStr(s){
+  if(!s)return null;
+  s=s.trim();
+  if(s.includes("/"))return new Date(s);
+  if(s.includes("-"))return new Date(s);
+  if(s.length===8)return new Date(s.slice(0,4)+"-"+s.slice(4,6)+"-"+s.slice(6,8));
+  return null;
+}
+function nowTime(){const d=new Date();return d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});}
+function fmtS(v){if(v==null)return'<span class="hist-na">—</span>';return`<span class="hist-val">${v>0?"+":""}${v}</span>`;}
+function fmtC(v){if(v==null)return'<span class="hist-na">—</span>';return`<span class="comp-val">${v>0?"+":""}${v}</span>`;}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EMMA CUSIP HISTORY PARSER
+// ─────────────────────────────────────────────────────────────────────────────
+function parseEmmaCusipCSV(csvText, filename){
+  const lines=csvText.split('\n').map(l=>l.trim()).filter(Boolean);
+  if(lines.length<2)return null;
+  const header=lines[0].split(',').map(h=>h.replace(/"/g,'').trim().toUpperCase());
+  const col=name=>header.findIndex(h=>h.includes(name));
+  const yieldCol=col('YIELD');
+  const dateCol=col('TRADE DATE')>=0?col('TRADE DATE'):col('DATE');
+  const cusipCol=col('CUSIP');
+  if(yieldCol<0)return null;
+  let cusip=null;
+  const fm=filename.match(/([A-Z0-9]{9})/i);
+  if(fm)cusip=fm[1].toUpperCase();
+  const cutoff=new Date(); cutoff.setFullYear(cutoff.getFullYear()-1);
+  const trades=[];
+  let lastDate=null, lastYield=null;
+  for(let i=1;i<lines.length;i++){
+    const c=lines[i].split(',').map(x=>x.replace(/"/g,'').trim());
+    if(cusipCol>=0&&c[cusipCol]&&c[cusipCol].length===9)cusip=c[cusipCol].toUpperCase();
+    const y=parseFloat(c[yieldCol]);
+    if(isNaN(y)||y<=0||y>20)continue;
+    const td=dateCol>=0?parseDateStr(c[dateCol]):null;
+    if(td&&!lastDate||td>lastDate){lastDate=td;lastYield=y;}
+    if(td&&td>=cutoff)trades.push(y);
+  }
+  if(!cusip)return null;
+  if(!trades.length)return{cusip,hiYield:null,loYield:null,avgYield:null,lastDate:lastDate?lastDate.toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'2-digit'}):null,lastYield,tradeCount:0};
+  const hi=Math.max(...trades), lo=Math.min(...trades), avg=trades.reduce((a,b)=>a+b,0)/trades.length;
+  return{cusip,hiYield:+hi.toFixed(3),loYield:+lo.toFixed(3),avgYield:+avg.toFixed(3),lastDate:lastDate?lastDate.toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'2-digit'}):null,lastYield,tradeCount:trades.length};
+}
+
+function histSpread(hist,matYear){
+  if(!hist||!matYear)return{hi:null,avg:null,lo:null};
+  const m=getMMD(matYear); if(!m)return{hi:null,avg:null,lo:null};
+  return{
+    hi:hist.hiYield!=null?Math.round((hist.hiYield-m)*100):null,
+    avg:hist.avgYield!=null?Math.round((hist.avgYield-m)*100):null,
+    lo:hist.loYield!=null?Math.round((hist.loYield-m)*100):null
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BULK TRADE FILE PARSER
+// Handles two formats:
+// 1. Bloomberg MOSB — tab-delimited, columns: CUSIP, Short Name, ST, Cpn, Maturity, Next Call, Price, Yield, Spd Conv, ...
+// 2. EMMA CSV — comma-delimited, columns: Trade Date, CUSIP, Security Description, Coupon, Maturity Date, Yield, Par Value, ...
+// ─────────────────────────────────────────────────────────────────────────────
+function parseBulkTradeCSV(csvText){
+  const lines=csvText.split('\n').map(l=>l.trim()).filter(Boolean);
+  if(lines.length<2)return[];
+
+  // Find header row
+  let headerIdx=0;
+  for(let i=0;i<Math.min(5,lines.length);i++){
+    if(lines[i].toUpperCase().includes('CUSIP')){headerIdx=i;break;}
+  }
+
+  const headerLine=lines[headerIdx];
+  const headerUpper=headerLine.toUpperCase();
+  const isMOSB=headerUpper.includes('SHORT NAME')&&headerUpper.includes('CUSIP')&&headerUpper.includes('YIELD');
+  const delim=headerLine.includes('\t')?'\t':',';
+
+  const headers=headerLine.split(delim).map(h=>h.replace(/"/g,'').trim().toUpperCase());
+  const col=name=>headers.findIndex(h=>h.includes(name));
+
+  const trades=[];
+
+  if(isMOSB){
+    // Bloomberg MOSB format
+    const cusipCol=col('CUSIP');
+    const nameCol=col('SHORT NAME');
+    const stateCol=col('ST');
+    const cpnCol=col('CPN');
+    const matCol=col('MATURITY');
+    const yieldCol=col('YIELD');
+    const spreadCol=col('SPD');
+    const sizeCol=col('SZ');
+    const timeCol=col('TIME');
+    for(let i=headerIdx+1;i<lines.length;i++){
+      const c=lines[i].split(delim).map(x=>x.replace(/"/g,'').trim());
+      if(!c[cusipCol]||c[cusipCol].length!==9)continue;
+      const yRaw=c[yieldCol];
+      const y=yRaw&&yRaw!=='--'?parseFloat(yRaw):null;
+      if(!y||isNaN(y)||y<=0||y>20)continue;
+      const matD=parseDateStr(c[matCol]);
+      const matYear=matD?matD.getFullYear():null;
+      if(!matYear)continue;
+      const cpn=cpnCol>=0?parseFloat(c[cpnCol]):null;
+      const sizeRaw=sizeCol>=0?c[sizeCol]:'';
+      const size=sizeRaw?parseFloat(sizeRaw.replace(/[^0-9.]/g,''))||null:null;
+      let spread=spreadCol>=0&&c[spreadCol]?parseInt(c[spreadCol]):null;
+      // Compute spread from yield-MMD if SPD column missing or blank
+      if(spread==null&&y&&matYear){const mv=getMMD(matYear);if(mv)spread=Math.round((y-mv)*100);}
+      trades.push({
+        cusip:c[cusipCol].toUpperCase(),
+        desc:nameCol>=0?c[nameCol]:'',
+        cpn, matYear,
+        yield:y, spread, size,
+        tradeDate:timeCol>=0?c[timeCol]:'',
+        type:'',
+        par:size?size*1000000:null
+      });
+    }
+  } else {
+    // EMMA CSV format
+    const cusipCol=col('CUSIP');
+    const descCol=col('DESCRIPTION')>=0?col('DESCRIPTION'):col('SECURITY');
+    const cpnCol=col('COUPON')>=0?col('COUPON'):col('INTEREST RATE');
+    const matCol=col('MATURITY');
+    const yieldCol=col('YIELD');
+    const parCol=col('PAR')>=0?col('PAR'):col('QUANTITY')>=0?col('QUANTITY'):col('AMOUNT');
+    const dateCol=col('TRADE DATE')>=0?col('TRADE DATE'):col('DATE');
+    const typeCol=col('TRADE TYPE')>=0?col('TRADE TYPE'):col('TYPE');
+    if(cusipCol<0||yieldCol<0)return[];
+    for(let i=headerIdx+1;i<lines.length;i++){
+      const c=lines[i].split(',').map(x=>x.replace(/"/g,'').trim());
+      if(!c[cusipCol]||c[cusipCol].length!==9)continue;
+      const y=parseFloat(c[yieldCol]);
+      if(isNaN(y)||y<=0||y>20)continue;
+      const par=parCol>=0?parseFloat(c[parCol].replace(/[$,]/g,'')):null;
+      const cpn=cpnCol>=0?parseFloat(c[cpnCol]):null;
+      const matD=parseDateStr(matCol>=0?c[matCol]:'');
+      const matYear=matD?matD.getFullYear():null;
+      if(!matYear)continue;
+      trades.push({
+        cusip:c[cusipCol].toUpperCase(),
+        desc:descCol>=0?c[descCol]:'',
+        cpn, matYear,
+        yield:y, par,
+        tradeDate:dateCol>=0?c[dateCol]:'',
+        type:typeCol>=0?c[typeCol]:''
+      });
+    }
+  }
+  return trades;
+}
+
+// Find comps: maturity ±3 years + yield within ±0.40%, exclude same CUSIP
+function ratingTier(r){
+  if(!r)return 'NR';
+  const rr=r.includes('/')?r.split('/')[0]:r;
+  if(/Aaa|AAA/.test(rr))return'Aaa';
+  if(/Aa[123]|AA[+-]?/.test(rr))return'Aa';
+  if(/A[123]|A[+-]?/.test(rr))return'A';
+  if(/Baa[123]|BBB[+-]?/.test(rr))return'Baa';
+  return'NR';
+}
+const CA_KEYWORDS=['CALIFORNIA','CA ST','CALIF','LOS ANGELES','SAN FRANCISCO','SAN DIEGO','SACRAMENTO','OAKLAND','SAN JOSE','FRESNO','LONG BEACH','ALAMEDA','CONTRA COSTA','ORANGE CO','RIVERSIDE','SAN BERNARDINO','SAN MATEO','SANTA CLARA','VENTURA','MARIN','SONOMA','KERN','TULARE','MONTEREY','SANTA BARBARA','SOLANO','STANISLAUS','SAN JOAQUIN'];
+function isCAIssuer(name){
+  if(!name)return false;
+  const u=name.toUpperCase();
+  return CA_KEYWORDS.some(k=>u.includes(k))||/ CA | CA$|^CA /.test(' '+u+' ');
+}
+function isCAHeavySession(){
+  if(!bonds.length)return false;
+  const caCount=bonds.filter(b=>isCAIssuer(b.issuer)).length;
+  return caCount/bonds.length>0.5;
+}
+
+function findComps(bond, maxResults=8){
+  if(!bulkTrades.length)return{comps:[],total:0};
+  const caOnly=isCAHeavySession();
+  const hasDealerSpread=bond.spread!=null&&bond.callYear&&bond.matYear&&bond.matYear!==bond.callYear;
+  const compYear=(hasDealerSpread?bond.matYear:bond.callYear||bond.matYear)||2030;
+  const isLongBond=compYear>2045;
+  const matWindow=isLongBond?6:3;
+  const matLo=compYear-matWindow, matHi=compYear+matWindow;
+  const bondTier=ratingTier(bond.rating);
+  const TIER_ORDER=['Aaa','Aa','A','Baa','NR'];
+  const bondTierIdx=TIER_ORDER.indexOf(bondTier);
+  const yWindowBase={'Aaa':0.25,'Aa':0.35,'A':0.50,'Baa':0.65}[bondTier]||0.50;
+  const yWindow=isLongBond?yWindowBase+0.15:yWindowBase;
+  const yLo=(bond.ytw||3)-yWindow, yHi=(bond.ytw||3)+yWindow;
+  // Detect bond sector for comp matching
+  const bondSector=detectSector(bond.issuer,bond.cusip,bond.taxable,bond.amt);
+
+  function runFilter(requireSector){
+    const seen=new Map();
+    for(const t of bulkTrades){
+      if(caOnly&&!isCAIssuer(t.desc))continue;
+      if(t.cusip===bond.cusip)continue;
+      if(!t.matYear||t.matYear<matLo||t.matYear>matHi)continue;
+      if(!t.yield||t.yield<yLo||t.yield>yHi)continue;
+      // Sector filter
+      if(requireSector&&bondSector){
+        const tSector=detectSector(t.desc||t.issuer||'',t.cusip,t.taxable);
+        if(tSector&&tSector!==bondSector)continue;
+      }
+      // Rating filter
+      if(bondTierIdx>=0&&bondTier!=='NR'){
+        let tTier=ratingTier(t.rating||t.desc);
+        if(tTier==='NR'&&t.spread!=null){
+          if(t.spread<=20)tTier='Aaa';
+          else if(t.spread<=40)tTier='Aa';
+          else if(t.spread<=70)tTier='A';
+          else tTier='Baa';
+        }
+        const tIdx=TIER_ORDER.indexOf(tTier);
+        if(tIdx>=0&&tTier!=='NR'&&Math.abs(tIdx-bondTierIdx)>1)continue;
+      }
+      if(!seen.has(t.cusip)) seen.set(t.cusip,t);
+    }
+    return Array.from(seen.values()).sort((a,b)=>Math.abs(a.matYear-compYear)-Math.abs(b.matYear-compYear));
+  }
+
+  // Try sector-matched comps first; fall back to any sector if fewer than 3
+  let all=bondSector?runFilter(true):[];
+  if(all.length<3) all=runFilter(false);
+
+  // If still no comps and Aaa bond, widen rating tier by 1 and retry
+  if(all.length<3 && bondTier==='Aaa'){
+    const origTierIdx=bondTierIdx;
+    // Temporarily patch bondTierIdx to allow Aa comps (idx 1 instead of 0)
+    const _origFilter=runFilter;
+    function runFilterWide(requireSector){
+      const seen=new Map();
+      for(const t of bulkTrades){
+        if(caOnly&&!isCAIssuer(t.desc))continue;
+        if(t.cusip===bond.cusip)continue;
+        if(!t.matYear||t.matYear<matLo||t.matYear>matHi)continue;
+        if(!t.yield||t.yield<yLo||t.yield>yHi)continue;
+        if(requireSector&&bondSector){
+          const tSector=detectSector(t.desc||t.issuer||'',t.cusip,t.taxable);
+          if(tSector&&tSector!==bondSector)continue;
+        }
+        // Allow up to Aa (2 tiers from Aaa)
+        let tTier=ratingTier(t.rating||t.desc);
+        if(tTier==='NR'&&t.spread!=null){
+          if(t.spread<=20)tTier='Aaa';
+          else if(t.spread<=40)tTier='Aa';
+          else if(t.spread<=70)tTier='A';
+          else tTier='Baa';
+        }
+        const tIdx=TIER_ORDER.indexOf(tTier);
+        if(tIdx>=0&&tTier!=='NR'&&tIdx>2)continue; // allow Aaa+Aa only
+        if(!seen.has(t.cusip)) seen.set(t.cusip,t);
+      }
+      return Array.from(seen.values()).sort((a,b)=>Math.abs(a.matYear-compYear)-Math.abs(b.matYear-compYear));
+    }
+    if(all.length<3) all=bondSector?runFilterWide(true):[];
+    if(all.length<3) all=runFilterWide(false);
+  }
+
+  if(!all.length && bond.cusip){
+    const matPassed=bulkTrades.filter(t=>t.cusip!==bond.cusip&&t.matYear>=matLo&&t.matYear<=matHi);
+    const yPassed=matPassed.filter(t=>t.yield>=yLo&&t.yield<=yHi);
+    console.log(`NO COMPS ${bond.cusip} sector=${bondSector||'none'} compYear=${compYear} matWin=[${matLo}-${matHi}] yWin=[${yLo.toFixed(2)}-${yHi.toFixed(2)}] tier=${bondTier} matPassed=${matPassed.length} yPassed=${yPassed.length} ratingFiltered=${yPassed.length-all.length}`);
+  }
+  return{comps:all.slice(0,maxResults),total:all.length};
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FILE UPLOAD HANDLERS
+// ─────────────────────────────────────────────────────────────────────────────
+function dOver(e,id){e.preventDefault();document.getElementById(id).classList.add('dragover');}
+function dLeave(id){document.getElementById(id).classList.remove('dragover');}
+function dDrop(e,cb){
+  e.preventDefault();
+  const id=e.currentTarget.id;
+  document.getElementById(id).classList.remove('dragover');
+  const files=Array.from(e.dataTransfer.files).filter(f=>/\.(csv|xlsx|xls)$/i.test(f.name));
+  if(cb==='emma-file-cb')processEmmaCusipFiles(files);
+  else if(files.length)processCompFile(files[0]);
+}
+
+function loadEmmaCusip(e){processEmmaCusipFiles(Array.from(e.target.files));e.target.value='';}
+function loadBulkTrades(e){processCompFile(e.target.files[0]);e.target.value='';}
+
+// Convert XLSX file to TSV/CSV text using SheetJS
+function xlsxToText(arrayBuffer){
+  const wb=XLSX.read(arrayBuffer,{type:'array'});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  // Output as tab-delimited to preserve MOSB format
+  return XLSX.utils.sheet_to_csv(ws,{FS:'\t',RS:'\n'});
+}
+
+function processEmmaCusipFiles(files){
+  if(!files.length)return;
+  let ok=0,fail=0;
+  files.forEach(f=>{
+    const r=new FileReader();
+    r.onload=e=>{
+      const res=parseEmmaCusipCSV(e.target.result,f.name);
+      if(res&&res.cusip){emmaHistory[res.cusip]=res;ok++;}else fail++;
+      if(ok+fail===files.length){
+        const m=document.getElementById('emma-msg');
+        m.style.display='block';
+        m.textContent=`✓ ${ok} file${ok!==1?'s':''} loaded · ${Object.keys(emmaHistory).length} CUSIPs total${fail?` · ${fail} failed`:''}`;
+        document.getElementById('emma-count').textContent=Object.keys(emmaHistory).length+' CUSIPs';
+        renderEmmaList();
+        if(bonds.length)renderTable();
+      }
+    };
+    r.readAsText(f);
+  });
+}
+
+function processCompFile(file){
+  if(!file)return;
+  const isXlsx=/\.(xlsx|xls)$/i.test(file.name);
+  const r=new FileReader();
+  r.onload=e=>{
+    let text;
+    if(isXlsx){
+      text=xlsxToText(e.target.result);
+    } else {
+      text=e.target.result;
+    }
+    const trades=parseBulkTradeCSV(text);
+    if(!trades.length){
+      const m=document.getElementById('comp-msg');
+      m.style.display='block'; m.style.color='#f87171';
+      m.textContent='⚠ Could not parse file. Check it has CUSIP, Yield, Maturity columns.';
+      return;
+    }
+    bulkTrades=trades;
+    bulkTradeDate=file.name;
+    const m=document.getElementById('comp-msg');
+    m.style.display='block'; m.style.color='#4ade80';
+    m.textContent=`✓ Loaded ${trades.length.toLocaleString()} trades from ${file.name}`;
+    renderCompSummary();
+    if(bonds.length)renderTable();
+  };
+  if(isXlsx) r.readAsArrayBuffer(file);
+  else r.readAsText(file);
+}
+
+function renderEmmaList(){
+  const keys=Object.keys(emmaHistory);
+  const el=document.getElementById('emma-list');
+  if(!keys.length){el.style.display='none';return;}
+  el.style.display='block';
+  el.innerHTML=keys.map(c=>{
+    const h=emmaHistory[c];
+    return`<div class="loaded-row">
+      <span style="color:#38bdf8;font-weight:700">${c}</span>
+      <span style="color:#4a7fa5">${h.tradeCount} trades</span>
+      <span style="color:#a78bfa">Last: ${h.lastDate||'—'} @ ${h.lastYield?h.lastYield.toFixed(2)+'%':'—'}</span>
+      <button class="btn-remove" onclick="delete emmaHistory['${c}'];renderEmmaList();if(bonds.length)renderTable();">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function renderCompSummary(){
+  if(!bulkTrades.length){document.getElementById('comp-summary').style.display='none';return;}
+  // Stats
+  const withYield=bulkTrades.filter(t=>t.yield);
+  const uniqueCusips=new Set(bulkTrades.map(t=>t.cusip)).size;
+  const minYield=Math.min(...withYield.map(t=>t.yield)).toFixed(2);
+  const maxYield=Math.max(...withYield.map(t=>t.yield)).toFixed(2);
+  // Mat year distribution
+  const matDist={};
+  bulkTrades.forEach(t=>{if(t.matYear){const d=Math.floor(t.matYear/5)*5;matDist[d]=(matDist[d]||0)+1;}});
+  document.getElementById('comp-summary').style.display='block';
+  document.getElementById('comp-summary-content').innerHTML=`
+    <div class="loaded-row"><span style="color:#c9d8f0">Source</span><span style="color:#f59e0b">${bulkTradeDate}</span></div>
+    <div class="loaded-row"><span style="color:#c9d8f0">Total Trades</span><span style="color:#38bdf8;font-weight:700">${bulkTrades.length.toLocaleString()}</span></div>
+    <div class="loaded-row"><span style="color:#c9d8f0">Unique CUSIPs</span><span style="color:#38bdf8;font-weight:700">${uniqueCusips.toLocaleString()}</span></div>
+    <div class="loaded-row"><span style="color:#c9d8f0">Yield Range</span><span style="color:#4ade80">${minYield}% – ${maxYield}%</span></div>
+    <div class="loaded-row"><span style="color:#c9d8f0">Maturity Distribution</span><span style="color:#4a7fa5">${Object.entries(matDist).sort((a,b)=>+a[0]-+b[0]).map(([y,n])=>`${y}s:${n}`).join(' · ')}</span></div>
+  `;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// BLOOMBERG PARSER — dual mode
+// Mode A: MSG/run format  "5575m @ 3.00 VA *VIRGINIA BEACH 5.000 08/01/38 9277342G7"
+// Mode B: Bloomberg run table "530576CC9375LIBERTY HILL...N.A.AATX5.00009/01/352.87117.578"
+// ─────────────────────────────────────────────────────────────────────────────
+const MOODY_RATINGS=['Aaa','Aa1','Aa2','Aa3','A1','A2','A3','Baa1','Baa2','Baa3','Ba1','Ba2','Ba3','B1','B2','B3'];
+const SP_RATINGS=['AAA','AA\\+','AA-','AA','A\\+','A-','A','BBB\\+','BBB-','BBB','BB\\+','BB-','BB'];
+const MOODY_RE=new RegExp('('+MOODY_RATINGS.join('|')+'|N\\.A\\.)');
+const SP_RE=new RegExp('('+SP_RATINGS.join('|')+'|N\\.A\\.)');
+const MOODY_BEFORE_SP=new RegExp('('+MOODY_RATINGS.join('|')+'|N\\.A\\.)(?='+SP_RATINGS.join('|')+'|N\\.A\\.)');
+const SP_AFTER_MOODY=new RegExp('(?:'+MOODY_RATINGS.join('|')+'|N\\.A\\.)('+SP_RATINGS.join('|')+'|N\\.A\\.)');
+
+// Rating rank — lower index = better credit
+const RATING_RANK=["Aaa","AAA","Aa1","AA+","Aa2","AA","Aa3","AA-","A1","A+","A2","A","A3","A-","Baa1","BBB+","Baa2","BBB","Baa3","BBB-","NR"];
+function pickRating(moody, sp){
+  const m=moody&&moody!=='N.A.'?moody:null;
+  const s=sp&&sp!=='N.A.'?sp:null;
+  if(!m&&!s)return null;
+  if(!m)return s;
+  if(!s)return m;
+  // Return the BETTER (higher quality) of the two ratings for band calculation
+  const ri=r=>{ const i=RATING_RANK.indexOf(r); return i===-1?99:i; };
+  return ri(m)<=ri(s)?m:s;
+}
+
+// Insurer rating map — use insurer's own current rating
+const INSURER_RATINGS={
+  'BAM':'AA',       // Build America Mutual — AA S&P
+  'AGM':'AA',       // Assured Guaranty Municipal — A1/AA
+  'ASSURED':'AA',
+  'FGIC':null,      // defunct
+  'AMBAC':null,     // defunct
+  'MBIA':null,      // effectively defunct
+  'NPFG':null,      // defunct
+  'SYNCORA':null,   // defunct
+};
+function getInsuredRating(issuer, notes){
+  const s=((issuer||'')+(notes||'')).toUpperCase();
+  for(const [k,v] of Object.entries(INSURER_RATINGS)){
+    if(v&&s.includes(k)) return v;
+  }
+  return null;
+}
+
+// Detect if text looks like a Bloomberg run table (no @ signs, CUSIPs run together)
+function isRunTableFormat(text){
+  if(text.includes('@'))return false;
+  const STATES='AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC|PR|GU|VI';
+  // CUSIP followed immediately by a valid 2-letter state code then more content
+  const cusipStateRe=new RegExp('[A-Z0-9]{9}('+STATES+')[A-Z]');
+  return cusipStateRe.test(text);
+}
+
+// Parse Bloomberg run table format
+// Handles: CUSIP+State+Issuer+Cpn+Mty+[CallDate]+Size+YTW+[Spread]+Mdy+SP
+//      and: CUSIP+Size+Issuer+Mdy+SP+State+Cpn+Mty+[Call]+YTW+Price
+function parseRunTable(text, dbg){
+  const result=[], seen=new Set();
+  // Find all CUSIP start positions (9 alphanum + valid 2-letter US state code)
+  const STATES='AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC|PR|GU|VI';
+  const cusipPos=[];
+  const rp=new RegExp('[A-Z0-9]{9}(?:'+STATES+')','g');
+  let pm;
+  while((pm=rp.exec(text))!==null) cusipPos.push(pm.index);
+  dbg.push('CUSIP positions: '+cusipPos.length);
+  for(let i=0;i<cusipPos.length;i++){
+    const seg=text.slice(cusipPos[i], i+1<cusipPos.length?cusipPos[i+1]:text.length);
+    const cusip=seg.slice(0,9).toUpperCase();
+    const state=seg.slice(9,11);
+    if(seen.has(cusip)){dbg.push('SKIP dupe: '+cusip);continue;}
+    // Maturity — first future date
+    const allDates=[...seg.matchAll(/(\d{2}\/\d{2}\/\d{2})/g)];
+    let matYear=null;
+    for(const dm of allDates){const y=parseMatYear(dm[1]);if(y&&y>=2025&&y<=2075){matYear=y;break;}}
+    if(!matYear){dbg.push('SKIP no mat: '+cusip);continue;}
+    // Coupon
+    const cpnM=seg.match(/(\d+\.\d{3})/);
+    const cpn=cpnM?parseFloat(cpnM[1]):null;
+    // Size + YTW — two possible orderings after last date:
+    // Format A: [size][ytw]  e.g. "1,4753.45" (customer run format)
+    // Format B: [ytw][size]  e.g. "4.505000"  (this format)
+    const lastSlash=seg.lastIndexOf('/');
+    const after=lastSlash>=0?seg.slice(lastSlash+3):seg;
+    const stM=after.match(/(\d{1,2},\d{3}|\d{3,6})\s*(\d\.\d{2})\b/);   // size then ytw
+    const tsM=after.match(/^(\d\.\d{2})(\d{3,6})/);                        // ytw then size
+    const ytw=stM?parseFloat(stM[2]):tsM?parseFloat(tsM[1]):null;
+    const size=stM?parseFloat(stM[1].replace(/,/g,'')):tsM?parseFloat(tsM[2]):null;
+    // Ratings — try paired first, then solo Moody's, then solo S&P
+    const moodyM=seg.match(MOODY_BEFORE_SP);
+    const spM=seg.match(SP_AFTER_MOODY);
+    let moody=moodyM?moodyM[1]:null;
+    let sp=spM?spM[1]:null;
+    // If no paired match, try solo Moody's at end of segment
+    if(!moody){
+      const soloMoody=seg.match(new RegExp('('+MOODY_RATINGS.join('|')+')(?:\\s*$|\\s+N\\.A\\.)'));
+      if(soloMoody) moody=soloMoody[1];
+    }
+    // Solo S&P
+    if(!sp){
+      const soloSP=seg.match(new RegExp('(?:^|\\s)('+SP_RATINGS.join('|')+')(?:\\s*$|\\s+N\\.A\\.)'));
+      if(soloSP) sp=soloSP[1];
+    }
+    const rating=pickRating(moody,sp);
+    // Issuer — text between state code and coupon, trailing ratings stripped
+    const afterState=seg.slice(11).trim();
+    const cpnIdx=afterState.search(/\b[3-9]\.\d{3}\b/);
+    const ratingEnd=/\s+(N\.A\.|Aaa|Aa[123]|A[123]|Baa[123]|NR|AAA|AA[+-]?|A[+-]?)\s*$/;
+    const issuer=cpnIdx>0?afterState.slice(0,cpnIdx).trim().replace(ratingEnd,'').replace(ratingEnd,'').trim().slice(0,50):'';
+    dbg.push(`✓ ${cusip} ${state} "${issuer}" cpn=${cpn} mat=${matYear} ytw=${ytw} mdy=${moody} sp=${sp}`);
+    seen.add(cusip);
+    result.push({cusip,issuer,cpn,matYear,ytw,size,moody,sp,rating,state});
+  }
+  return result;
+}
+
+// Parse MSG / single offering format
+// Also handles MOSB screen paste: CUSIP ShortName Cpn Mty Spread IssueDate R Sz Trds Vol Time
+function parseMsgFormat(text, dbg){
+  const result=[], seen=new Set();
+  // Join continuation lines (no CUSIP) onto preceding CUSIP line
+  const rawLines=text.split("\n").map(l=>l.trim()).filter(Boolean);
+  const lines=[];
+  for(const l of rawLines){
+    const hasCusip=/(?<![A-Z0-9])[A-Z0-9]{9}(?![A-Z0-9])/i.test(l);
+    if(!hasCusip&&lines.length) lines[lines.length-1]+=' '+l;
+    else lines.push(l);
+  }
+  dbg.push("LINES: "+lines.length);
+  for(const line of lines){
+    dbg.push("---\nLINE: "+line);
+    const cusipCandidates=[...line.matchAll(/(?<![A-Z0-9])([A-Z0-9]{9})(?![A-Z0-9])/gi)];
+    if(!cusipCandidates.length){dbg.push("SKIP: no CUSIP");continue;}
+    const cusip=cusipCandidates[cusipCandidates.length-1][1].toUpperCase();
+    if(seen.has(cusip)){dbg.push("SKIP: dupe");continue;}
+
+    // Find all dates — first future date is maturity
+    const allDates=[...line.matchAll(/(\d{2}\/\d{2}\/\d{2,4})/g)];
+    let matYear=null, matDateStr=null;
+    for(const dm of allDates){
+      const y=parseMatYear(dm[1]);
+      if(y&&y>=2025&&y<=2075){matYear=y;matDateStr=dm[1];break;}
+    }
+    if(!matYear){dbg.push("SKIP: bad year");continue;}
+
+    // YTW — explicit @ takes priority, otherwise first X.XX in yield range after dates
+    const ytwM=line.match(/@\s*([\d.]+)/);
+    let ytw=ytwM?parseFloat(ytwM[1]):null;
+    if(!ytw&&matDateStr){
+      // Look for X.XX pattern after all dates (yield range 1.00-7.99, exactly 2 decimal places)
+      const afterAllDates=line.slice(line.lastIndexOf('/')+3);
+      const ytwFallback=afterAllDates.match(/\b([1-7]\.\d{2})\b/);
+      if(ytwFallback) ytw=parseFloat(ytwFallback[1]);
+    }
+
+    // Coupon
+    const cpnM=line.match(/\b(\d+\.\d{3})\b/);
+    const cpn=cpnM?parseFloat(cpnM[1]):null;
+
+    // YTW whole-line fallback — handles formats where yield appears before maturity
+    if(!ytw){
+      const allYieldCands=[...line.matchAll(/\b([1-7]\.\d{2,3})\b/g)]
+        .map(m=>parseFloat(m[1])).filter(v=>v!==cpn&&v>=1.0&&v<8.0);
+      if(allYieldCands.length) ytw=allYieldCands[0];
+    }
+
+    // Spread — +N or -N anywhere on line, or integer after maturity date
+    let spread=null;
+    // Front-loaded spread (e.g. "+9" before issuer, or "2.67+46" attached to yield)
+    if(!spread){
+      const attachedM=line.match(/\d\.\d{2,3}([+\-]\d{1,3})(?![\d\.])/);
+      if(attachedM) spread=parseInt(attachedM[1]);
+    }
+    if(!spread){
+      const frontSpreadM=line.match(/(?<![\w\/])[+\-](\d{1,3})(?![\.\d\/])/);
+      if(frontSpreadM) spread=parseInt(frontSpreadM[0]);
+    }
+    if(!ytw&&!spread&&matDateStr){
+      const afterMat=line.slice(line.indexOf(matDateStr)+matDateStr.length);
+      const spreadM=afterMat.match(/\s+(-?\d{1,3})\s+/);
+      if(spreadM){
+        spread=parseInt(spreadM[1]);
+        // Back-calculate YTW from spread + MMD
+        const mmdVal=getMMD(matYear);
+        if(mmdVal!=null){
+          ytw=+(mmdVal+spread/100).toFixed(3);
+          dbg.push(`YTW back-calc from spread ${spread}bps + MMD ${mmdVal} = ${ytw}`);
+        }
+      }
+    }
+
+    // Size
+    const sizeM=line.match(/(\d+(?:\.\d+)?)[mM]\s*@/i)||line.match(/\b(\d{2,5})\b(?=\s+\d+\s+\d{6,})/);
+    const size=sizeM?parseFloat(sizeM[1]):null;
+
+    // Issuer — for MOSB format, issuer is the text immediately after CUSIP before first digit
+    // For MSG format, clean up the full line
+    let issuer='';
+    const issuerOnlyM=line.match(/^[A-Z0-9]{9}\s*([A-Z][A-Z &\/\-\.]+?)(?:\s+\d|\s*$)/i);
+    if(issuerOnlyM){
+      issuer=issuerOnlyM[1].trim().slice(0,50);
+    } else {
+      issuer=line
+        .replace(/\{[^}]*\}/g,"")
+        .replace(new RegExp('\\b'+cusip+'\\b',"gi"),"")
+        .replace(/\b\d{2}\/\d{2}\/\d{2,4}\b/g,"")
+        .replace(/\b\d+(?:\.\d+)?[mMkK]+\b/g,"")
+        .replace(/\b(offered?|bid|ata?|at)\b/gi,"")
+        .replace(/\d+\.\d{2,3}[+\-]\d+/g," ")
+        .replace(/@\s*[\d.]+/,"")
+        .replace(/(?<!\w)[+\-]\d{1,3}(?!\d)/g," ")
+        .replace(/\*\s*/g,"")
+        .replace(/\b\d+\.\d{3}\b/g," ")
+        .replace(/\b[1-7]\.\d{2,3}\b/g," ")
+        .replace(/\b\d{3,}\b/g," ")
+        .replace(/^\s*[A-Z]{2}\s+/,"")
+        .replace(/-[A-Z]\b/g,"").replace(/\b[A-Z]-\s+/g," ").replace(/\b[A-Z]-$/g,"")
+        .replace(/\s+/g," ").trim().slice(0,50);
+    }
+
+    // Inline ratings — paired first, then solo
+    const inlineRtg=line.match(/(Aaa|Aa[123]|A[123]|Baa[123])\s*\/\s*(AAA|AA[+-]?|A[+-]?)/);
+    let moody=inlineRtg?inlineRtg[1]:null;
+    let sp=inlineRtg?inlineRtg[2]:null;
+    if(!moody){const sm=line.match(new RegExp('('+MOODY_RATINGS.join('|')+')(?:\\s*$|\\s)'));if(sm)moody=sm[1];}
+    if(!sp){const ss=line.match(new RegExp('(?:^|\\s)('+SP_RATINGS.join('|')+')(?:\\s*$|\\s)'));if(ss)sp=ss[1];}
+    const rating=pickRating(moody,sp)||lookupRating(issuer)||lookupRating(line);
+
+    dbg.push(`✓ MSG ${cusip} mat=${matYear} ytw=${ytw} sprd=${spread} rtg=${rating||'—'}`);
+    seen.add(cusip);
+    result.push({cusip,issuer,cpn,matYear,ytw,spread,size,moody,sp,rating});
+  }
+  return result;
+}
+
+// Detect formatted run table with headers: Security Sz(M) Issuer Mdy S&P St Cpn Mty...
+function isFormattedRunTable(text){
+  return /Security\s+Sz.*Issuer.*Mdy.*S&P/i.test(text) ||
+         /^[A-Z0-9]{9}\s+\d+\s+[A-Z].*(N\.A\.|Aaa|Aa[123]|A[123]|Baa[123])\s+(N\.A\.|AAA|AA|A[+-]?)/m.test(text);
+}
+
+// Detect concatenated run (no newlines/spaces between fields)
+function isConcatRunTable(text){
+  return /Security\s+Sz\(M\)\s+Issuer.*Mdy.*S&P/i.test(text) && !text.includes('\n');
+}
+
+// Parse concatenated Bloomberg run (all fields run together, no newlines)
+// Format: ...Price530576CC9230LIBERTY...N.A.AATX5.00009/01/352.92117.107...
+function parseConcatRun(text, dbg){
+  const STATES_LIST='AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC|PR|GU|VI';
+  const MOODY_LIST='N\\.A\\.|Aaa|Aa[123]|A[123]|Baa[123]';
+  const SP_LIST='N\\.A\\.|AAA|AA\\+|AA-|AA|A\\+|A-|A';
+  // Split at price→CUSIP boundaries: NNN.NNN followed by a CUSIP start
+  const withNewlines = text
+    .replace(/Price([A-Z0-9]{9}\d{1,4}[A-Z])/g,'Price\n$1')  // header→first CUSIP
+    .replace(/(\d{3}\.\d{3})([A-Z0-9]{9}\d{1,4}[A-Z])/g,'$1\n$2'); // price→next CUSIP
+  const lines = withNewlines.split('\n').map(l=>l.trim()).filter(l=>/^[A-Z0-9]{9}/.test(l));
+  dbg.push('CONCAT lines: '+lines.length);
+  const segRe=new RegExp(
+    '^([A-Z0-9]{9})(\\d+)([A-Z][A-Z0-9 &\\/\\-\\.]+?)('+MOODY_LIST+')('+SP_LIST+')('+STATES_LIST+')(\\d+\\.\\d{3})(\\d{2}\\/\\d{2}\\/\\d{2})(\\d+[a-z])?([1-9]\\.\\d{2})'
+  );
+  const result=[], seen=new Set();
+  for(const line of lines){
+    const m=line.match(segRe);
+    if(!m){dbg.push('SKIP concat: '+line.slice(0,40));continue;}
+    const cusip=m[1].toUpperCase();
+    if(seen.has(cusip)) continue;
+    const matYear=parseMatYear(m[8]);
+    if(!matYear||matYear<2025||matYear>2075) continue;
+    const moody=m[4]==='N.A.'?null:m[4];
+    const sp=m[5]==='N.A.'?null:m[5];
+    const rating=pickRating(moody,sp);
+    const issuer=m[3].trim().slice(0,50);
+    dbg.push(`✓ CONCAT ${cusip} "${issuer}" mdy=${m[4]} sp=${m[5]} mat=${matYear} ytw=${m[10]}`);
+    seen.add(cusip);
+    result.push({cusip, issuer, size:parseFloat(m[2]), cpn:parseFloat(m[7]), matYear, ytw:parseFloat(m[10]), moody, sp, rating, state:m[6]});
+  }
+  return result;
+}
+
+// Parse formatted run table (Bloomberg dealer run with header row)
+// Format: CUSIP Sz Issuer Mdy S&P St Cpn Mty [Call] YTW Price
+function parseFormattedRun(text, dbg){
+  const MOODY_LIST='Aaa|Aa1|Aa2|Aa3|A1|A2|A3|Baa1|Baa2|Baa3|Ba1|Ba2|Ba3';
+  const SP_LIST='AAA|AA\\+|AA-|AA|A\\+|A-|A|BBB\\+|BBB-|BBB|BB\\+|BB-|BB';
+  const STATES_LIST='AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC|PR|GU|VI';
+  const rowRe=new RegExp(
+    '^([A-Z0-9]{9})\\s+(\\d+)\\s+(.+?)\\s+('+MOODY_LIST+'|N\\.A\\.)\\s+('+SP_LIST+'|N\\.A\\.)\\s+('+STATES_LIST+')\\s+(\\d+\\.\\d+)\\s+(\\d{2}\\/\\d{2}\\/\\d{2})\\s+(?:\\d+[a-z]\\s+)?(\\d+\\.\\d+)\\s+([\\d.]+)',
+    'm'
+  );
+  const result=[], seen=new Set();
+  const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
+  for(const line of lines){
+    const m=line.match(rowRe);
+    if(!m) continue;
+    const cusip=m[1].toUpperCase();
+    if(seen.has(cusip)) continue;
+    const matYear=parseMatYear(m[8]);
+    if(!matYear||matYear<2025||matYear>2075) continue;
+    const moody=m[4]==='N.A.'?null:m[4];
+    const sp=m[5]==='N.A.'?null:m[5];
+    const rating=pickRating(moody,sp);
+    dbg.push(`✓ FMT ${cusip} ${m[3].trim().slice(0,20)} mdy=${m[4]} sp=${m[5]} mat=${matYear} ytw=${m[9]}`);
+    seen.add(cusip);
+    result.push({
+      cusip, issuer:m[3].trim().slice(0,50),
+      size:parseFloat(m[2]), cpn:parseFloat(m[7]),
+      matYear, ytw:parseFloat(m[9]),
+      moody, sp, rating, state:m[6]
+    });
+  }
+  return result;
+}
+
+function isNoStateRunTable(text){
+  return /Security\s+Issuer\s+Mood/i.test(text);
+}
+function parseNoStateRun(text, dbg){
+  const MOODY_LIST='N\\.A\\.|Aaa|Aa[123]|A[123]|Baa[123]';
+  const SP_LIST='N\\.A\\.|AAA|AA\\+|AA-|AA|A\\+|A-|A';
+  // Strip header line, split remaining on newlines
+  const body=text.replace(/^Security\s+Issuer.*$/im,'');
+  const lines=body.split('\n').map(l=>l.trim()).filter(l=>/^[A-Z0-9]{9}/.test(l));
+  dbg.push('NOSTATE lines: '+lines.length);
+  // Spaced: CUSIP ISSUER MOODY SP CPN MAT [CALL] SZ YTW
+  const re=new RegExp(
+    '^([A-Z0-9]{9})\\s+([A-Z][A-Z0-9 &\\/\\-\\.]+?)\\s+('+MOODY_LIST+')\\s+('+SP_LIST+')\\s+(\\d+\\.\\d+)\\s+(\\d{2}\\/\\d{2}\\/\\d{2})(?:\\s+\\d{2}\\/\\d{2}\\/\\d{2}[A-Z]?)?\\s+(\\d+)\\s+(\\d+\\.\\d+)'
+  );
+  const result=[],seen=new Set();
+  for(const line of lines){
+    const m=line.match(re);
+    if(!m){dbg.push('SKIP nostate: '+line.slice(0,60));continue;}
+    const cusip=m[1].toUpperCase();
+    if(seen.has(cusip))continue;
+    const matYear=parseMatYear(m[6]);
+    if(!matYear||matYear<2025||matYear>2075)continue;
+    const moody=m[3]==='N.A.'?null:m[3];
+    const sp=m[4]==='N.A.'?null:m[4];
+    const rating=pickRating(moody,sp);
+    const issuer=m[2].trim().slice(0,50);
+    const ytw=parseFloat(m[8]);
+    dbg.push('✓ NOSTATE '+cusip+' "'+issuer+'" mdy='+moody+' sp='+sp+' mat='+matYear+' ytw='+ytw);
+    seen.add(cusip);
+    result.push({cusip,issuer,size:parseFloat(m[7]),cpn:parseFloat(m[5]),matYear,ytw,moody,sp,rating});
+  }
+  return result;
+}
+function isObligorRunTable(text){
+  // Header: Security St Issuer Cpn Mty Nxt Call ... MMD+ Obligor Moody S&P
+  return /Security\s+St\s+Issuer/i.test(text);
+}
+function parseObligorRun(text, dbg){
+  const MOODY='N\\.A\\.|Aaa|Aa[123]|A[123]|Baa[123]';
+  const SP='N\\.A\\.|AAA|AA\\+|AA-|AA|A\\+|A-|A(?!a)';
+  const body=text.replace(/^Security\s+St\s+Issuer.*$/im,'');
+  // Split on SP-rating-end + next CUSIP+state (concat input)
+  const withNL=body.replace(/(AA\+|AA-|AA(?![+-A-Z])|A\+|A-|(?<![A-Z])A(?![A-Za-z])|N\.A\.)([A-Z0-9]{9}[A-Z]{2})/g,'$1\n$2');
+  const lines=withNL.split('\n').map(l=>l.trim()).filter(l=>/^[A-Z0-9]{9}/.test(l));
+  dbg.push('OBLIGOR lines: '+lines.length);
+  // Handle both spaced (already split by cleaner) and run-together formats
+  const reSpaced=new RegExp(
+    '^([A-Z0-9]{9})\\s+([A-Z]{2})\\s+([A-Z][A-Z0-9 &\\/\\-\\.]+?)\\s+(\\d+\\.\\d{3})\\s+(\\d{2}\\/\\d{2}\\/\\d{2})\\s+(\\d{2}\\/\\d{2}\\/\\d{2})\\s+(\\d+\\.\\d{3})\\s+[\\d.]+\\s+([\\d,]+)\\s+(-?\\d+)\\s+[A-Za-z &\\.]+?\\s+('+MOODY+')\\s+('+SP+')\\s*$'
+  );
+  const reConcat=new RegExp(
+    '^([A-Z0-9]{9})([A-Z]{2})([A-Z][A-Z0-9 &\\/\\-\\.]+?)(\\d+\\.\\d{3})(\\d{2}\\/\\d{2}\\/\\d{2})(\\d{2}\\/\\d{2}\\/\\d{2})(\\d+\\.\\d{3})(\\d+\\.\\d{3})([\\d,]+)(-?\\d+)[A-Za-z &\\.]+('+MOODY+')('+SP+')'
+  );
+  const result=[],seen=new Set();
+  for(const line of lines){
+    let m=line.match(reSpaced);
+    let spaced=true;
+    if(!m){m=line.match(reConcat);spaced=false;}
+    if(!m){dbg.push('SKIP obligor: '+line.slice(0,60));continue;}
+    const cusip=m[1].toUpperCase();
+    if(seen.has(cusip))continue;
+    const matYear=parseMatYear(m[5]);
+    if(!matYear||matYear<2025||matYear>2075)continue;
+    const moodyIdx=spaced?10:11, spIdx=spaced?11:12;
+    const moody=m[moodyIdx]==='N.A.'?null:m[moodyIdx];
+    const sp=m[spIdx]==='N.A.'?null:m[spIdx];
+    const rating=pickRating(moody,sp);
+    const issuer=m[3].trim().slice(0,50);
+    const ytw=parseFloat(m[7]);
+    const spread=parseInt(spaced?m[9]:m[10]);
+    dbg.push('✓ OBLIGOR '+cusip+' "'+issuer+'" mdy='+moody+' sp='+sp+' mat='+matYear+' ytw='+ytw+' spd='+spread);
+    seen.add(cusip);
+    result.push({cusip,issuer,state:m[2],size:parseFloat((spaced?m[8]:m[9]).replace(',','')),cpn:parseFloat(m[4]),matYear,ytw,spread,moody,sp,rating});
+  }
+  return result;
+}
+
+function isSzStateRunTable(text){
+  // Header: Security A Sz(M) St Issuer ... S&P Moody ... YTC
+  return /Security.*Sz\s*\(M\).*St\s+Issuer/i.test(text)||/Security.*Sz.*Issuer.*S&P.*Mood/i.test(text);
+}
+function parseSzStateRun(text, dbg){
+  const SP  ='N\\.A\\.|AAA|AA\\+|AA-|AA(?![+-A-Z])|A\\+|A-|A(?!a)';
+  const MOODY='N\\.A\\.|Aaa|Aa[123]|A[123]|Baa[123]';
+  const body=text
+    .replace(/^Security.*$/im,'')
+    .replace(/\*\*[^\n]*/g,'')
+    .replace(/\$[\d.]+/g,'');
+  const lines=body.split('\n').map(l=>l.trim()).filter(l=>/^[0-9A-Z]{9}/.test(l));
+  dbg.push('SZSTATE lines: '+lines.length);
+  // Spaced: CUSIP SZ ST ISSUER CPN MTY [CALL] SP MOODY [YTC] [notes]
+  const re=new RegExp(
+    '^([0-9A-Z]{9})\\s+(\\d+)\\s+([A-Z]{2})\\s+([A-Z][A-Z0-9 &\\/\\-\\.]+?)\\s+(\\d+\\.\\d{3})\\s+(\\d{2}\\/\\d{2}\\/\\d{2})\\s+(?:(\\d{2}\\/\\d{2}\\/\\d{2})\\s+)?('+SP+')\\s+('+MOODY+')(?:\\s+(\\d+\\.\\d{3}))?'
+  );
+  const result=[],seen=new Set();
+  for(const line of lines){
+    const m=line.match(re);
+    if(!m){dbg.push('SKIP szstate: '+line.slice(0,70));continue;}
+    const cusip=m[1].toUpperCase();
+    if(seen.has(cusip))continue;
+    const matYear=parseMatYear(m[6]);
+    if(!matYear||matYear<2025||matYear>2075)continue;
+    const sp=m[8]==='N.A.'?null:m[8];
+    const moody=m[9]==='N.A.'?null:m[9];
+    const rating=pickRating(moody,sp);
+    const issuer=m[4].trim().slice(0,50);
+    const ytw=m[10]?parseFloat(m[10]):null;
+    if(!ytw)continue; // skip bonds with no yield (e.g. price-only)
+    dbg.push('✓ SZSTATE '+cusip+' "'+issuer+'" sp='+sp+' mdy='+moody+' mat='+matYear+' ytw='+ytw);
+    seen.add(cusip);
+    result.push({cusip,issuer,state:m[3],size:parseFloat(m[2]),cpn:parseFloat(m[5]),matYear,ytw,sp,moody,rating});
+  }
+  return result;
+}
+
+function isTkrRunTable(text){
+  return /Security\s+Tkr\s+Issuer/i.test(text);
+}
+function parseTkrRun(text, dbg){
+  const MOODY='N\\.A\\.|Aaa|Aa[123]|A[123]|Baa[123]';
+  const SP='N\\.A\\.|AAA|AA\\+|AA-|AA(?![+-])|A\\+|A-|A(?![a1-9+\\-])';
+  const body=text
+    .replace(/^Security\s+Tkr.*$/im,'')
+    .replace(/[^\x00-\x7F]/g,' ')
+    .replace(/(\d{2,})(\d\.\d{3})/g,'$1 $2');
+  const lines=body.split('\n').map(l=>l.trim()).filter(l=>/^[0-9A-Z]{9}/.test(l));
+  dbg.push('TKR lines: '+lines.length);
+  const result=[],seen=new Set();
+  const ratingRe=new RegExp('('+MOODY+')\\s+('+SP+')(?:\\s+('+SP+'))?\\s*$');
+  for(const line of lines){
+    const rm=line.match(ratingRe);
+    if(!rm){dbg.push('SKIP tkr (no ratings): '+line.slice(0,60));continue;}
+    const moody=rm[1]==='N.A.'?null:rm[1];
+    const sp=rm[2]==='N.A.'?null:rm[2];
+    const rest=line.slice(0,rm.index).trim();
+    const cpnMtyM=rest.match(/(\d+\.\d{3})\s+(\d{2}\/\d{2}\/\d{2})/);
+    if(!cpnMtyM){dbg.push('SKIP tkr (no cpn/mty): '+rest.slice(0,50));continue;}
+    const cpn=parseFloat(cpnMtyM[1]),mtyStr=cpnMtyM[2];
+    const cusip=line.slice(0,9).toUpperCase();
+    if(seen.has(cusip))continue;
+    const matYear=parseMatYear(mtyStr);
+    if(!matYear||matYear<2025||matYear>2075)continue;
+    // Issuer: after CUSIP+TKR, before CPN — TKR is separated by spaces now
+    const afterCusip=rest.slice(9).trim();
+    const tkrM=afterCusip.match(/^([A-Z]{2,6})\s+/);
+    const afterTkr=tkrM?afterCusip.slice(tkrM[0].length):afterCusip;
+    const cpnPos=afterTkr.search(/\d+\.\d{3}/);
+    const issuer=(cpnPos>0?afterTkr.slice(0,cpnPos):afterTkr).trim().slice(0,50);
+    // Yield: last d.ddd in rest where 1.0<=val<20
+    const yieldMs=[...rest.matchAll(/(\d+\.\d{3})/g)]
+      .map(m=>({val:parseFloat(m[1])}))
+      .filter(n=>n.val>=1.0&&n.val<20.0);
+    const ytwCands=yieldMs.filter(n=>n.val!==cpn);
+    const ytw=ytwCands.length?ytwCands[ytwCands.length-1].val:null;
+    if(!ytw){dbg.push('SKIP tkr (no yield): '+cusip);continue;}
+    const rating=pickRating(moody,sp);
+    dbg.push('✓ TKR '+cusip+' "'+issuer+'" mdy='+(moody||'N.A.')+' sp='+(sp||'N.A.')+' mat='+matYear+' ytw='+ytw);
+    seen.add(cusip);
+    result.push({cusip,issuer,cpn,matYear,ytw,moody,sp,rating,taxable:true});
+  }
+  return result;
+}
+
+function isStSecIssuerRun(text){
+  // Format: Security St Issuer Moody S&P Cpn Mty Nxt Call ASz A Yield A Px Notes
+  // Has state code after CUSIP, N.A. allowed for Moody's
+  return /Security\s+St\s+Issuer.*A\s+Yield.*A\s+Px/i.test(text) ||
+         /Security\s+St\s+Issuer.*A\s+Px.*Notes/i.test(text);
+}
+function parseStSecIssuerRun(text, dbg){
+  const STATES="AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC|PR";
+  const body=text.replace(/^Security\s+St.*$/im,'').replace(/\n/g,' ').replace(/\s+/g,' ').trim();
+  const pattern=new RegExp(
+    '([0-9][A-Z0-9]{8})('+STATES+')(.*?)(N\.A\.|Aaa|Aa[123]|A[123]|Baa[123])\s*(AAA|AA[+\-]?|A[+\-]?|BBB[+\-]?)\s*(\d+\.\d{3})\s*(\d{2}/\d{2}/\d{2})\s*(\d{2}/\d{2}/\d{2})\s*(\d+)\s*(\d+\.\d{3})',
+    'g');
+  const matches=[...body.matchAll(pattern)];
+  dbg.push('StSecIssuer lines: '+matches.length);
+  const result=[],seen=new Set();
+  for(const m of matches){
+    const cusip=m[1], state=m[2];
+    if(seen.has(cusip))continue;
+    const issuer=m[3].trim().slice(0,60);
+    const rawMoody=m[4], sp=m[5];
+    const moody=rawMoody==='N.A.'?null:rawMoody;
+    const cpn=parseFloat(m[6]);
+    const matYear=parseMatYear(m[7]);
+    const callYear=parseMatYear(m[8]);
+    const size=parseFloat(m[9])/1000;
+    const ytw=parseFloat(m[10]);
+    if(!matYear||matYear<2025||matYear>2075)continue;
+    if(ytw<1||ytw>20)continue;
+    const effectiveCallYear=(callYear&&callYear<matYear)?callYear:null;
+    const rating=pickRating(moody,sp);
+    dbg.push('✓ '+cusip+' "'+issuer+'" mat='+matYear+' ytw='+ytw+' rtg='+rating);
+    seen.add(cusip);
+    result.push({cusip,issuer,state,cpn,matYear,callYear:effectiveCallYear,size,ytw,moody,sp,rating});
+  }
+  return result;
+}
+
+function isSecIssuerMoodyRun(text){
+  return /Security\s+Issuer\s+Moody\s+S&P.*A\s+YTW/i.test(text);
+}
+function parseSecIssuerMoodyRun(text, dbg){
+  const body=text.replace(/^Security\s+Issuer.*?YTW/i,'').replace(/\n/g,' ').replace(/\s+/g,' ').trim();
+  const pattern=/([0-9][A-Z0-9]{8})\s+(.*?)\s*(Aaa|Aa[123]|A[123]|Baa[123])\s*(AAA|AA[+\-]?|A[+\-]?|BBB[+\-]?)\s*(\d+\.\d{3})\s*(\d{2}\/\d{2}\/\d{2})\s*(\d{2}\/\d{2}\/\d{2})\s*(\d+)\s*(\d+\.\d{3})/g;
+  const matches=[...body.matchAll(pattern)];
+  dbg.push('SecIssuerMoody lines: '+matches.length);
+  const result=[],seen=new Set();
+  for(const m of matches){
+    const cusip=m[1];
+    if(seen.has(cusip))continue;
+    const issuer=m[2].trim().slice(0,60);
+    const moody=m[3], sp=m[4];
+    const cpn=parseFloat(m[5]);
+    const matYear=parseMatYear(m[6]);
+    const callYear=parseMatYear(m[7]);
+    const size=parseFloat(m[8])/1000;
+    const ytw=parseFloat(m[9]);
+    if(!matYear||matYear<2025||matYear>2075)continue;
+    if(ytw<1||ytw>20)continue;
+    const rating=pickRating(moody,sp);
+    dbg.push('✓ '+cusip+' "'+issuer+'" mat='+matYear+' ytw='+ytw+' rtg='+rating);
+    seen.add(cusip);
+    result.push({cusip,issuer,cpn,matYear,callYear,size,ytw,moody,sp,rating});
+  }
+  return result;
+}
+
+function isStSecIssuerRun(text){
+  // Header: Security St Issuer Moody S&P Cpn Mty Nxt Call ... A Yield
+  return /Security\s+St\s+Issuer.*Moody.*S&P.*A\s+Yield/i.test(text)||
+         /Security\s+St\s+Issuer.*S&P.*Cpn.*Mty.*Nxt\s+Call/i.test(text);
+}
+function parseStSecIssuerRun(text, dbg){
+  const STATES="AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC|PR";
+  const body=text.replace(/^Security\s+St.*$/im,'').replace(/\n/g,' ').replace(/\s+/g,' ').trim();
+  const pattern=new RegExp('([0-9][A-Z0-9]{8})\\s+('+STATES+')\\s+(.*?)\\s+(N\\.A\\.|Aaa|Aa[123]|A[123]|Baa[123]|NR)\\s+(AAA|AA[+\\-]?|A[+\\-]?|BBB[+\\-]?|NR)\\s+(\\d+\\.\\d{3})\\s+(\\d{2}\\/\\d{2}\\/\\d{2})\\s+(\\d{2}\\/\\d{2}\\/\\d{2})\\s+(\\d+)\\s+(\\d+\\.\\d{3})','g');
+  const matches=[...body.matchAll(pattern)];
+  dbg.push('StSecIssuer lines: '+matches.length);
+  const result=[],seen=new Set();
+  for(const m of matches){
+    const cusip=m[1],state=m[2];
+    if(seen.has(cusip))continue;
+    const issuer=m[3].trim().slice(0,60);
+    const rawMoody=m[4],rawSP=m[5];
+    const moody=rawMoody==='N.A.'?null:rawMoody;
+    const sp=rawSP==='N.A.'?null:rawSP;
+    const cpn=parseFloat(m[6]);
+    const matYear=parseMatYear(m[7]);
+    const callYear=parseMatYear(m[8]);
+    const size=parseFloat(m[9])/1000;
+    const ytw=parseFloat(m[10]);
+    if(!matYear||matYear<2025||matYear>2075)continue;
+    if(ytw<1||ytw>20)continue;
+    const rating=pickRating(moody,sp);
+    const effectiveCallYear=(callYear&&callYear<matYear)?callYear:null;
+    dbg.push('✓ '+cusip+' "'+issuer+'" st='+state+' mat='+matYear+' call='+(effectiveCallYear||'NC')+' ytw='+ytw+' rtg='+rating);
+    seen.add(cusip);
+    result.push({cusip,issuer,state,cpn,matYear,callYear:effectiveCallYear,size,ytw,moody,sp,rating});
+  }
+  return result;
+}
+
+function isHousingBidRun(text){
+  return /Security\s+St\s+Issuer.*B\s+Px.*B\s+Yield/i.test(text) ||
+         (/Security\s+St\s+Issuer.*Nxt\s+Call/i.test(text) &&
+          !/Spread/i.test(text.split('\n')[0]||''));
+}
+function parseHousingBidRun(text, dbg){
+  const STATES="AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC|PR";
+  const body=text.replace(/^Security\s+St.*$/im,'').replace(/\n/g,' ').replace(/\s+/g,' ').trim();
+  // Handle both spaced (189344GN8 CA CLOVIS) and concatenated (189344GN8CACLOVIS)
+  const re=new RegExp('([0-9A-Z]{9})\\s*('+STATES+')\\s*([A-Z])','g');
+  const matches=[...body.matchAll(re)];
+  dbg.push('HSG lines: '+matches.length);
+  const result=[],seen=new Set();
+  for(let i=0;i<matches.length;i++){
+    const start=matches[i].index;
+    const end=i+1<matches.length?matches[i+1].index:body.length;
+    const seg=body.slice(start,end);
+    const cusip=matches[i][1], st=matches[i][2];
+    if(seen.has(cusip))continue;
+    // Skip past CUSIP + optional space + state + optional space
+    const matchLen=matches[i][0].length;
+    const rest=seg.slice(matchLen-1); // -1 because last char of match is first char of issuer
+    const cpnMtyM=rest.match(/(\d+\.\d{3})\s*(\d{2}\/\d{2}\/\d{2})/);
+    if(!cpnMtyM){dbg.push('SKIP hsg (no cpn/mty): '+seg.slice(0,50));continue;}
+    const cpn=parseFloat(cpnMtyM[1]),mtyStr=cpnMtyM[2];
+    const issuer=rest.slice(0,rest.indexOf(cpnMtyM[0])).trim().slice(0,50);
+    const matYear=parseMatYear(mtyStr);
+    if(!matYear||matYear<2025||matYear>2075)continue;
+    const afterMty=rest.slice(rest.indexOf(cpnMtyM[0])+cpnMtyM[0].length);
+    // Optional call date
+    const callM=afterMty.match(/^\s*(\d{2}\/\d{2}\/\d{2})/);
+    const afterCall=callM?afterMty.slice(callM[0].length):afterMty;
+    // SZ (digits) then APx/BPx (dd+.ddd) then AYield/BYield (d.ddd) then optional ratings
+    const numM=afterCall.match(/^\s*(\d+)\s*(\d{2,3}\.\d{3})\s*(\d\.\d{3})\s*([A-Za-z0-9.]+)?\s*([A-Za-z0-9+\-]+)?/);
+    if(!numM){dbg.push('SKIP hsg (no px/yield): '+cusip+' "'+afterCall.slice(0,30)+'"');continue;}
+    const size=parseFloat(numM[1])/1000; // size in MM
+    const ytw=parseFloat(numM[3]);
+    if(ytw<1||ytw>20)continue;
+    // Parse ratings
+    const rawMoody=(numM[4]||'').trim();
+    const rawSP=(numM[5]||'').trim();
+    const moody=rawMoody&&rawMoody!=='N.A.'&&/^(Aaa|Aa|A|Baa|Ba|B|NR)/.test(rawMoody)?rawMoody:null;
+    const sp=rawSP&&rawSP!=='N.A.'&&/^(AAA|AA|A|BBB|BB|B|NR)/.test(rawSP)?rawSP:null;
+    const rating=pickRating(moody,sp);
+    dbg.push('✓ HSG '+cusip+' "'+issuer+'" mat='+matYear+' ytw='+ytw+' sz='+size+(callM?' call='+callM[1]:'')+(rating?' rtg='+rating:''));
+    seen.add(cusip);
+    result.push({cusip,issuer,state:st,cpn,matYear,ytw,size,moody,sp,rating});
+  }
+  return result;
+}
+function isGasPrepayRun(text){
+  return /Security\s+St\s+Issuer.*Nxt\s+Call.*YTC/i.test(text)||
+    (/[A-Z0-9]{9}AL(?:BLACK BELT|SOUTHEAST ENERGY|ENERGY S E)/i.test(text.slice(0,200)));
+}
+function parseGasPrepayRun(text, dbg){
+  const result=[], seen=new Set();
+  const parseY=d=>{const y=parseInt(d.slice(6));return y<80?2000+y:1900+y;};
+  // Detect spaced vs concatenated
+  const firstData=text.split('\n').filter(l=>/^[A-Z0-9]{9}[\s]/.test(l.trim()))[0]||'';
+  const isSpaced=/^[A-Z0-9]{9}\s/.test(firstData);
+  const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.length>9&&/^[A-Z0-9]{9}[\s]/.test(l)||/^[A-Z0-9]{9}[A-Z]{2}/.test(l));
+  for(const raw of lines){
+    const cusip=raw.slice(0,9);
+    if(seen.has(cusip))continue;
+    let cpn=null,matYear=null,callYear=null,ytw=null,sz=null,issuer='',moody=null,sp=null;
+    if(isSpaced){
+      const p=raw.split(/\s+/);
+      if(p.length<8)continue;
+      let arr=[...p.slice(1)]; // skip cusip
+      arr.shift(); // skip state
+      // Pop from end: sp, moody, ytm, ytc, price, sz, dates, cpn
+      const sp_r=arr.pop(); sp=sp_r==='N.A.'?null:sp_r;
+      const mo_r=arr.pop(); const moParts=mo_r.split('/');
+      moody=moParts[0]==='N.A.'?null:moParts[0];
+      const ytm=parseFloat(arr.pop());
+      const ytc=parseFloat(arr.pop());
+      arr.pop(); // price
+      sz=parseInt(arr.pop())||null;
+      const dates=[];
+      while(arr.length&&/^\d{2}\/\d{2}\/\d{2,4}$/.test(arr[arr.length-1]))dates.unshift(arr.pop());
+      cpn=parseFloat(arr.pop());
+      issuer=arr.join(' ');
+      if(dates.length>=2){callYear=parseY(dates[0]);matYear=parseY(dates[1]);}
+      else if(dates.length===1){matYear=parseY(dates[0]);}
+      ytw=callYear?ytc:ytm;
+    } else {
+      let s=raw.slice(11); // skip cusip+state
+      // Ratings from end (handle Aa1/VMIG1 style)
+      const rtgM=s.match(/((?:Aaa|Aa[123]|A[123]?|Baa[123]|N\.A\.)(?:\/[A-Z0-9]+)?)(AAA|AA[+-]?|A[+-]?|N\.A\.)?$/);
+      if(!rtgM)continue;
+      let moodyRaw=rtgM[1].split('/')[0];
+      moody=moodyRaw==='N.A.'?null:moodyRaw;
+      const spRaw=rtgM[2]; sp=spRaw&&spRaw!=='N.A.'?spRaw:null;
+      s=s.slice(0,s.lastIndexOf(rtgM[0])).trim();
+      // Strip ytm, ytc, price
+      const ytmM=s.match(/(\d\.\d{3})$/); const ytm=ytmM?parseFloat(ytmM[1]):null;
+      s=s.replace(/\d\.\d{3}$/,'').trim();
+      const ytcM=s.match(/(\d\.\d{3})$/); const ytc=ytcM?parseFloat(ytcM[1]):null;
+      s=s.replace(/\d\.\d{3}$/,'').trim();
+      s=s.replace(/\d{2,3}\.\d{3}$/,'').trim();
+      // Last date+sz appended
+      const lastDSM=s.match(/(\d{2}\/\d{2}\/\d{2})(\d*)$/);
+      if(lastDSM){sz=lastDSM[2]?parseInt(lastDSM[2]):null;s=s.slice(0,s.lastIndexOf(lastDSM[0])).trim();}
+      // Remaining dates (call date)
+      const dates=[];
+      if(lastDSM)dates.push(lastDSM[1]);
+      while(s.length>=8){const tail=s.slice(-8);if(/^\d{2}\/\d{2}\/\d{2}$/.test(tail)){dates.unshift(tail);s=s.slice(0,-8).trim();}else break;}
+      // Cpn
+      const cpnM=s.match(/(\d+\.\d{3})$/);
+      cpn=cpnM?parseFloat(cpnM[1]):null;
+      s=s.replace(/\d+\.\d{3}$/,'').trim();
+      issuer=s;
+      if(dates.length>=2){callYear=parseY(dates[0]);matYear=parseY(dates[1]);}
+      else if(dates.length===1){
+        const yr=parseY(dates[0]);
+        if(ytc&&ytm&&Math.abs(ytc-ytm)>0.05){callYear=yr;matYear=yr+22;}
+        else{matYear=yr;callYear=null;}
+      }
+      ytw=callYear?ytc:(ytm||ytc);
+    }
+    if(!matYear||matYear<2025||!ytw){dbg.push('SKIP: '+cusip);continue;}
+    const rating=moody||sp||null;
+    seen.add(cusip);
+    dbg.push(`✓ GAS ${cusip} ${issuer.slice(0,20)} call=${callYear||'NC'} mat=${matYear} ytw=${ytw} ${rating||'NR'}`);
+    result.push({cusip,issuer,cpn,matYear,callYear,ytw,spread:null,size:sz,moody,sp,rating});
+  }
+  return result;
+}
+
+function isNotesRunTable(text){
+  return /Security\s+St\s+Issuer\s+Cpn\s+Mty.*Fitch.*Spread/i.test(text);
+}
+function parseNotesRun(text, dbg){
+  const result=[], seen=new Set();
+  const US_ST=new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC','GU','PR','VI']);
+  const MPAT=/^(Aaa|Aa[123]|A[123]?|Baa[123]|N\.A\.)$/;
+  const SPAT=/^(AAA|AA[+-]?|A[+-]?|BBB[+-]?|AWD|N\.A\.)$/;
+  const parseY=d=>{const y=parseInt(d.slice(6));return y<80?2000+y:1900+y;};
+  // Detect spaced vs concatenated
+  const isSpaced=/^[A-Z0-9]{8,9}\s+[A-Z]{2}\s+/.test(text.split('\n').filter(l=>/^[A-Z0-9]{8,9}/.test(l.trim()))[0]||'');
+  const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.length>9&&/^[A-Z0-9]{8,9}[\s]/.test(l)||/^[A-Z0-9]{8,9}[A-Z]{2}/.test(l));
+  for(const raw of lines){
+    if(isSpaced){
+      // Spaced format — pop fields from tokenized array
+      const p=raw.trim().split(/\s+/);
+      if(p.length<8)continue;
+      const cusip=p[0]; const st=p[1];
+      if(!US_ST.has(st)||cusip.length<8)continue;
+      if(seen.has(cusip))continue;
+      let arr=[...p.slice(2)];
+      const spreadStr=arr[arr.length-1];
+      if(!/^\d{1,3}$/.test(spreadStr))continue;
+      const spread=parseInt(arr.pop());
+      let fitch=null,sp=null,moody=null;
+      if(SPAT.test(arr[arr.length-1])){const v=arr.pop();fitch=['N.A.','AWD'].includes(v)?null:v;}
+      if(SPAT.test(arr[arr.length-1])){const v=arr.pop();sp=['N.A.','AWD'].includes(v)?null:v;}
+      if(MPAT.test(arr[arr.length-1])){const v=arr.pop();moody=v==='N.A.'?null:v;}
+      const sz=parseInt((arr.pop()||'').replace(/,/g,''))||null;
+      const ytw=parseFloat(arr.pop());
+      if(isNaN(ytw))continue;
+      arr.pop(); // price
+      const dates=[];
+      while(arr.length&&/^\d{2}\/\d{2}\/\d{2,4}$/.test(arr[arr.length-1]))dates.unshift(arr.pop());
+      const cpn=parseFloat(arr.pop());
+      const issuer=arr.join(' ');
+      const matYear=dates.length>=1?parseY(dates[0]):null;
+      const callYear=dates.length>=2?parseY(dates[1]):null;
+      if(!matYear||matYear<2025||!ytw){dbg.push('SKIP: '+cusip);continue;}
+      const insRating=getInsuredRating(issuer,notes);
+      const rating=insRating||(moody||fitch||sp||null);
+      seen.add(cusip);
+      dbg.push(`✓ NOTES ${cusip} ${issuer.slice(0,20)} mat=${matYear} ytw=${ytw} +${spread} ${rating||'NR'}${insRating?' [INS]':''}`);
+      result.push({cusip,issuer,cpn,matYear,callYear,ytw,spread,size:sz,moody,sp,fitch,rating,notes});
+    } else {
+      // Concatenated format
+      let cusip,st,s;
+      if(US_ST.has(raw.slice(9,11))){cusip=raw.slice(0,9);st=raw.slice(9,11);s=raw.slice(11);}
+      else if(US_ST.has(raw.slice(8,10))){cusip=raw.slice(0,8);st=raw.slice(8,10);s=raw.slice(10);}
+      else{dbg.push('SKIP no state: '+raw.slice(0,12));continue;}
+      if(seen.has(cusip))continue;
+      const rtgM=s.match(/(Aaa|Aa[123]|A[123]?|Baa[123]|N\.A\.)(AAA|AA[+-]?|A[+-]?|AWD|N\.A\.)(AAA|AA[+-]?|A[+-]?|AWD|N\.A\.)(\d{1,3})(.*?)$/);
+      if(!rtgM){dbg.push('SKIP no rtg: '+cusip);continue;}
+      const moody=rtgM[1]==='N.A.'?null:rtgM[1];
+      const sp=['N.A.','AWD'].includes(rtgM[2])?null:rtgM[2];
+      const fitch=['N.A.','AWD'].includes(rtgM[3])?null:rtgM[3];
+      const spread=parseInt(rtgM[4]);
+      s=s.slice(0,rtgM.index).trim();
+      const dateStart=s.search(/\d{2}\/\d{2}\//);
+      const dates=[];
+      let pos=dateStart;
+      while(pos>=0&&pos+8<=s.length){const chunk=s.slice(pos,pos+8);if(/^\d{2}\/\d{2}\/\d{2}$/.test(chunk)){dates.push(chunk);pos+=8;}else break;}
+      const beforeDates=dateStart>=0?s.slice(0,dateStart).trim():s;
+      const afterDates=pos>=0?s.slice(pos):'';
+      const ytwSzM=afterDates.match(/([1-9]\.\d{2,3})(\d{1,3},\d{3})$/)||afterDates.match(/([1-9]\.\d{2,3})(\d{1,4})$/);
+      const ytw=ytwSzM?parseFloat(ytwSzM[1]):null;
+      const sz=ytwSzM?parseInt(ytwSzM[2].replace(/,/g,'')):null;
+      const matYear=dates.length>=1?parseY(dates[0]):null;
+      const callYear=dates.length>=2?parseY(dates[1]):null;
+      if(!matYear||matYear<2025||!ytw){dbg.push('SKIP: '+cusip);continue;}
+      const cpnM=beforeDates.match(/(\d+\.\d{3})$/);
+      const cpn=cpnM?parseFloat(cpnM[1]):null;
+      const issuer=beforeDates.replace(/\d+\.\d{3}$/,'').trim();
+      const insRating=getInsuredRating(issuer,notes);
+      const rating=insRating||(moody||fitch||sp||null);
+      seen.add(cusip);
+      dbg.push(`✓ NOTES ${cusip} ${issuer.slice(0,20)} mat=${matYear} ytw=${ytw} +${spread} ${rating||'NR'}${insRating?' [INS]':''}`);
+      result.push({cusip,issuer,cpn,matYear,callYear,ytw,spread,size:sz,moody,sp,fitch,rating,notes});
+    }
+  }
+  return result;
+}
+
+function isSzIssuerCusipRun(text){
+  // Starts with size(int) then issuer text then 9-char CUSIP then coupon
+  return /^\d{1,6}[A-Z].*[A-Z0-9]{9}\d\.\d{3}\d{2}\/\d{2}\/\d{2}/.test(text.split('\n').filter(l=>l.trim().length>20)[0]||'');
+}
+function parseSzIssuerCusipRun(text,dbg){
+  const result=[],seen=new Set();
+  const lines=text.split('\n').map(l=>l.trim()).filter(l=>/^\d+[A-Z]/.test(l)&&l.length>20);
+  for(const raw of lines){
+    const szM=raw.match(/^(\d+)/);
+    if(!szM)continue;
+    const sz=parseInt(szM[1]);
+    let s=raw.slice(szM[0].length);
+    const cusipM=s.match(/([A-Z0-9]{9})(\d\.\d{3})/);
+    if(!cusipM){dbg.push('SKIP no cusip: '+raw.slice(0,20));continue;}
+    const cusip=cusipM[1];
+    if(seen.has(cusip))continue;
+    const issuer=s.slice(0,cusipM.index).trim();
+    s=s.slice(cusipM.index+9);
+    const cpnM=s.match(/^(\d+\.\d{3})/);
+    const cpn=cpnM?parseFloat(cpnM[1]):null;
+    s=s.slice(cpnM?cpnM[0].length:0);
+    const dates=[];let pos=0;
+    while(pos+8<=s.length){const chunk=s.slice(pos,pos+8);if(/^\d{2}\/\d{2}\/\d{2}$/.test(chunk)){dates.push(chunk);pos+=8;}else break;}
+    s=s.slice(pos);
+    const parseY=d=>{const y=parseInt(d.slice(6));return y<80?2000+y:1900+y;};
+    const matYear=dates.length>=1?parseY(dates[0]):null;
+    const callYear=dates.length>=2?parseY(dates[1]):null;
+    if(!matYear||matYear<2025){dbg.push('SKIP bad year: '+cusip);continue;}
+    const ytwM=s.match(/^(\d\.\d{3})/);
+    const ytw=ytwM?parseFloat(ytwM[1]):null;
+    if(!ytw){dbg.push('SKIP no ytw: '+cusip);continue;}
+    s=s.slice(ytwM.length);
+    s=s.replace(/^\d{2,3}\.\d{3}/,'').trim();
+    const rtgM=s.match(/^(Aaa|Aa[123]|A[123]?|Baa[123]|N\.A\.)(AAA|AA[+-]?|A[+-]?|AWD|N\.A\.)(AAA|AA[+-]?|A[+-]?|AWD|N\.A\.)/);
+    let moody=null,sp=null,fitch=null;
+    if(rtgM){moody=rtgM[1]==='N.A.'?null:rtgM[1];sp=['N.A.','AWD'].includes(rtgM[2])?null:rtgM[2];fitch=['N.A.','AWD'].includes(rtgM[3])?null:rtgM[3];}
+    const insRating=getInsuredRating(issuer,s);
+    const rating=insRating||(moody||fitch||sp||null);
+    seen.add(cusip);
+    dbg.push(`✓ SZIC ${cusip} ${issuer.slice(0,20)} mat=${matYear} ytw=${ytw} ${rating||'NR'}${insRating?' [INS]':''}`);
+    result.push({cusip,issuer,cpn,matYear,callYear,ytw,size:sz,moody,sp,fitch,rating});
+  }
+  return result;
+}
+
+function isCusipSzIssuerStRun(text){
+  const firstLine=text.split('\n').filter(l=>l.trim().length>20&&/^[A-Z0-9]{9}[\s\d]/.test(l.trim()))[0]||'';
+  if(/^[A-Z0-9]{9}\d+[A-Z].*[A-Z]{2}\d+\.\d{3}\d{2}\/\d{2}\/\d{2}/.test(firstLine))return true;
+  if(/^[A-Z0-9]{9}\s+\d+\s+[A-Z].*[A-Z]{2}\s+\d+\.\d{3}\s+\d{2}\/\d{2}\/\d{2}/.test(firstLine))return true;
+  return false;
+}
+function parseCusipSzIssuerStRun(text,dbg){
+  const result=[],seen=new Set();
+  const US_ST=new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC','GU','PR','VI']);
+  const MPAT=/^(Aaa|Aa[123]|A[123]?|Baa[123]|N\.A\.)$/;
+  const SPAT=/^(AAA|AA[+-]?|A[+-]?|BBB[+-]?|N\.A\.)$/;
+  const DPAT=/^\d{2}\/\d{2}\/\d{2,4}$/;
+  const parseY=d=>{const y=parseInt(d.slice(6));return y<80?2000+y:1900+y;};
+  const firstDataLine=text.split('\n').filter(l=>/^[A-Z0-9]{9}[\s\d]/.test(l.trim()))[0]||'';
+  const isSpaced=/^[A-Z0-9]{9}\s/.test(firstDataLine);
+  const lines=text.split('\n').map(l=>l.trim()).filter(l=>/^[A-Z0-9]{9}[\s\d]/.test(l)&&l.length>20);
+  for(const raw of lines){
+    const cusip=raw.slice(0,9);
+    if(seen.has(cusip))continue;
+    let moody=null,sp=null,cpn=null,matYear=null,callYear=null,ytw=null,sz=null,issuer='';
+    if(isSpaced){
+      const p=raw.split(/\s+/);
+      if(p.length<8)continue;
+      let arr=[...p.slice(1)];
+      sz=/^\d+$/.test(arr[0])?parseInt(arr.shift()):null;
+      // Field order from end: ...cpn matDate callDate [SP] [Moody] YTW
+      // OR:                    ...cpn matDate callDate YTW [SP] [Moody]
+      // Pop ratings+ytw from end regardless of order
+      if(/^\d\.\d{3}$/.test(arr[arr.length-1])){
+        // YTW is last: pop it, then Moody (last), then SP (last)
+        ytw=parseFloat(arr.pop());
+        const mo_r=arr[arr.length-1];if(MPAT.test(mo_r)){const v=arr.pop();moody=v==='N.A.'?null:v;}
+        const sp_r=arr[arr.length-1];if(SPAT.test(sp_r)){const v=arr.pop();sp=v==='N.A.'?null:v;}
+      } else {
+        // Ratings are last: pop SP, then Moody, then optional price, then YTW
+        const sp_r=arr[arr.length-1];if(SPAT.test(sp_r)){const v=arr.pop();sp=v==='N.A.'?null:v;}
+        const mo_r=arr[arr.length-1];if(MPAT.test(mo_r)){const v=arr.pop();moody=v==='N.A.'?null:v;}
+        if(/^\d{2,3}\.\d{3}$/.test(arr[arr.length-1]))arr.pop();
+        ytw=/^\d\.\d{3}$/.test(arr[arr.length-1])?parseFloat(arr.pop()):null;
+      }
+      if(DPAT.test(arr[arr.length-1])){const d=arr.pop();callYear=parseY(d);}
+      if(DPAT.test(arr[arr.length-1])){const d=arr.pop();matYear=parseY(d);}
+      cpn=/^\d+\.\d{3}$/.test(arr[arr.length-1])?parseFloat(arr.pop()):null;
+      if(US_ST.has(arr[arr.length-1]))arr.pop();
+      issuer=arr.join(' ');
+    } else {
+      let s=raw.slice(9);
+      const szM=s.match(/^(\d+)/);sz=szM?parseInt(szM[1]):null;s=s.slice(szM?szM[0].length:0);
+      const stCpnM=s.match(/([A-Z]{2})(\d+\.\d{3})(\d{2}\/\d{2}\/\d{2})/);
+      if(!stCpnM||!US_ST.has(stCpnM[1])){dbg.push('SKIP no st: '+cusip);continue;}
+      issuer=s.slice(0,stCpnM.index).trim();cpn=parseFloat(stCpnM[2]);
+      s=s.slice(stCpnM.index+stCpnM[1].length+stCpnM[2].length);
+      const dates=[];let pos=0;
+      while(pos+8<=s.length){const chunk=s.slice(pos,pos+8);if(/^\d{2}\/\d{2}\/\d{2}$/.test(chunk)){dates.push(chunk);pos+=8;}else break;}
+      s=s.slice(pos);matYear=dates.length>=1?parseY(dates[0]):null;
+      const ytwM=s.match(/^(\d\.\d{3})/);ytw=ytwM?parseFloat(ytwM[1]):null;
+      s=s.slice(ytwM?ytwM[0].length:0);s=s.replace(/^\d\.\d{3}/,'');s=s.replace(/^\d{2,3}\.\d{3}/,'');
+      const callDates=[];pos=0;
+      while(pos+8<=s.length){const chunk=s.slice(pos,pos+8);if(/^\d{2}\/\d{2}\/\d{2}$/.test(chunk)){callDates.push(chunk);pos+=8;}else break;}
+      s=s.slice(pos);callYear=callDates.length>=1?parseY(callDates[0]):null;
+      const rtgM=s.match(/(Aaa|Aa[123]|A[123]?|Baa[123]|N\.A\.)(AAA|AA[+-]?|A[+-]?|BBB[+-]?|N\.A\.)?/);
+      moody=rtgM?(rtgM[1]==='N.A.'?null:rtgM[1]):null;
+      sp=rtgM&&rtgM[2]?(['N.A.'].includes(rtgM[2])?null:rtgM[2]):null;
+    }
+    if(!matYear||matYear<2025||!ytw){dbg.push('SKIP: '+cusip);continue;}
+    const rating=moody||sp||null;
+    seen.add(cusip);
+    dbg.push(`✓ CSIS ${cusip} ${issuer.slice(0,20)} mat=${matYear} call=${callYear||'--'} ytw=${ytw} ${rating||'NR'}`);
+    result.push({cusip,issuer,cpn,matYear,callYear,ytw,size:sz,moody,sp,fitch:null,rating});
+  }
+  return result;
+}
+
+function isSpreadSuffixRun(text){
+  // Matches both concat (CUSIPST...) and spaced (CUSIP ST ...) variants
+  // Key: data lines end with Moody +dd
+  const dataLines=text.split('\n').filter(l=>/^[A-Z0-9]{8,9}[\s]/.test(l.trim())||/^[A-Z0-9]{8,9}[A-Z]{2}/.test(l.trim()));
+  if(!dataLines.length)return false;
+  const first=dataLines[0].trim();
+  // Spaced: ends with "Aa2 +64" or "N.A. +97"
+  if(/(?:Aaa|Aa[123]|A[123]?|Baa[123]|N\.A\.)\s+\+\d+$/.test(first))return true;
+  // Concat: ends with "Aa2+64" or "N.A.+64"
+  if(/(?:Aaa|Aa[123]|A[123]?|Baa[123]|N\.A\.)\+\d+$/.test(first))return true;
+  return false;
+}
+function parseSpreadSuffixRun(text,dbg){
+  const result=[],seen=new Set();
+  const US_ST=new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC','GU','PR','VI']);
+  const MPAT=/(Aaa|Aa[123]|A[123]?|Baa[123]|N\.A\.)$/;
+  const DPAT=/^\d{2}\/\d{2}\/\d{2,4}$/;
+  const parseY=d=>{const y=parseInt(d.slice(6));return y<80?2000+y:1900+y;};
+  // Accept both spaced (CUSIP ST ...) and concat (CUSTST...) lines
+  const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.length>20&&(/^[A-Z0-9]{8,9}\s/.test(l)||/^[A-Z0-9]{8,9}[A-Z]{2}/.test(l)));
+  for(const raw of lines){
+    // Detect format
+    const isSpaced=/^[A-Z0-9]{8,9}\s/.test(raw);
+    let cusip,st,issuer,cpn,matYear,callYear,ytw,sz,moody,spread;
+    if(isSpaced){
+      const p=raw.split(/\s+/);
+      if(p.length<8)continue;
+      cusip=p[0]; st=p[1];
+      if(!US_ST.has(st))continue;
+      if(seen.has(cusip))continue;
+      let arr=[...p.slice(2)];
+      const spreadStr=arr[arr.length-1];
+      spread=/^\+\d+$/.test(spreadStr)?parseInt(spreadStr.slice(1)):null;
+      if(spread!==null)arr.pop();
+      const mr=arr[arr.length-1];
+      moody=MPAT.test(mr)?(mr==='N.A.'?null:mr):null;
+      if(MPAT.test(mr))arr.pop();
+      sz=/^\d+$/.test(arr[arr.length-1])?parseInt(arr.pop()):null;
+      ytw=/^\d\.\d{2}$/.test(arr[arr.length-1])?parseFloat(arr.pop()):null;
+      const dates=[];
+      while(arr.length&&DPAT.test(arr[arr.length-1]))dates.unshift(arr.pop());
+      matYear=dates.length>=1?parseY(dates[0]):null;
+      callYear=dates.length>=2?parseY(dates[1]):null;
+      cpn=/^\d+\.\d{3}$/.test(arr[arr.length-1])?parseFloat(arr.pop()):null;
+      issuer=arr.join(' ');
+    } else {
+      let s;
+      if(US_ST.has(raw.slice(9,11))){cusip=raw.slice(0,9);st=raw.slice(9,11);s=raw.slice(11);}
+      else if(US_ST.has(raw.slice(8,10))){cusip=raw.slice(0,8);st=raw.slice(8,10);s=raw.slice(10);}
+      else{dbg.push('SKIP no state: '+raw.slice(0,12));continue;}
+      if(seen.has(cusip))continue;
+      const spreadM=s.match(/\+(\d+)$/);
+      spread=spreadM?parseInt(spreadM[1]):null;
+      s=s.replace(/\+\d+$/,'').trim();
+      const moodyM=s.match(MPAT);
+      moody=moodyM?(moodyM[1]==='N.A.'?null:moodyM[1]):null;
+      s=s.replace(MPAT,'').trim();
+      const ytwSzM=s.match(/(\d\.\d{2})(\d+)$/);
+      ytw=ytwSzM?parseFloat(ytwSzM[1]):null;
+      sz=ytwSzM?parseInt(ytwSzM[2]):null;
+      if(ytwSzM)s=s.slice(0,s.length-ytwSzM[0].length).trim();
+      const dates=[];
+      while(s.length>=8){const tail=s.slice(-8);if(/^\d{2}\/\d{2}\/\d{2}$/.test(tail)){dates.unshift(tail);s=s.slice(0,-8).trim();}else break;}
+      matYear=dates.length>=1?parseY(dates[0]):null;
+      callYear=dates.length>=2?parseY(dates[1]):null;
+      const cpnM=s.match(/(\d+\.\d{3})$/);
+      cpn=cpnM?parseFloat(cpnM[1]):null;
+      issuer=s.replace(/\d+\.\d{3}$/,'').trim();
+    }
+    if(!matYear||matYear<2025||!ytw){dbg.push('SKIP: '+cusip);continue;}
+    const rating=moody||null;
+    seen.add(cusip);
+    dbg.push(`✓ SPRD ${cusip} ${(issuer||'').slice(0,20)} mat=${matYear} call=${callYear||'--'} ytw=${ytw} +${spread} ${rating||'NR'}`);
+    result.push({cusip,issuer,cpn,matYear,callYear,ytw,spread,size:sz,moody,sp:null,fitch:null,rating});
+  }
+  return result;
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// IMGR OFFERINGS PARSER
+// Cols: 0=Ref Security, 1=Time, 2=Source, 3=Dealer, 4=CUSIP, 5=Short Name,
+//       6=State, 7=Coupon, 8=Maturity, 9=Next Call Date, 10=Ask Price,
+//       11=S&P LT Best, 12=Moody's LT Best, 13=Ask Yield, 14=Ask Size, 15=Ask Spread,
+//       16=Benchmark, 17=Ref Benchmark, 18=Sender Name, 19=Sender Firm,
+//       20=Adv Refund Type, 21=S&P Rating, 22=Moody's Rating,
+//       23=Maturity/Refund Type, 24=Tax Provision, 25=Pre-refunded Maturity Date, 26=Industry
+// ─────────────────────────────────────────────────────────────────────────────
+function parseImgrText(text){
+  const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
+  if(!lines.length)return{bonds:[],skipped:[],msg:'No data'};
+  // Auto-detect delimiter: prefer tab (IMGR native), fallback comma
+  const firstLine=lines[0]||'';
+  const tabCount=(firstLine.match(/\t/g)||[]).length;
+  const commaCount=(firstLine.match(/,/g)||[]).length;
+  // Tab is strongly preferred - IMGR exports are tab-delimited
+  // Only use comma if zero tabs and many commas
+  const delim=(tabCount>0)?'\t':',';
+  const cols=firstLine.split(delim).length;
+  console.log(`IMGR: ${lines.length} lines, delim=${delim==='\t'?'TAB':'COMMA'}, cols=${cols}, tabs=${tabCount}, commas=${commaCount}`);
+  // Find header row
+  let dataStart=0;
+  for(let i=0;i<Math.min(5,lines.length);i++){
+    if(/CUSIP/i.test(lines[i])&&/Coupon/i.test(lines[i])){dataStart=i+1;break;}
+  }
+  console.log(`IMGR: dataStart=${dataStart}, data lines=${lines.length-dataStart}`);
+  const result=[],skipped=[];
+  const parseDate=s=>{
+    if(!s||s==='#N/A N/A'||!s.includes('/'))return null;
+    const p=s.split('/');if(p.length<3)return null;
+    let y=parseInt(p[2]);if(y<100)y+=2000;return y;
+  };
+  const cleanRtg=s=>{
+    if(!s||s==='#N/A N/A'||s.trim()===''||s==='N/A')return null;
+    return s.trim();
+  };
+  const seen=new Set();
+  for(let i=dataStart;i<lines.length;i++){
+    const f=lines[i].split(delim);
+    if(f.length<10)continue;
+    const cusip=(f[4]||'').trim();
+    if(!cusip||cusip.length<8)continue;
+    if(seen.has(cusip)){skipped.push(cusip+' (dup in file)');continue;}
+    const issuer=(f[5]||'').trim();
+    const state=(f[6]||'').trim();
+    const cpn=parseFloat(f[7])||null;
+    const matYear=parseDate(f[8]);
+    if(!matYear){skipped.push(cusip+' (no mat)');continue;}
+    // Col 9=Next Call Date, 10=Ask Price, 11=S&P LT Best, 12=Moody's LT Best
+    // 13=Ask Yield, 14=Ask Size, 15=Ask Spread, 21=S&P Rating, 22=Moody's Rating
+    // 23=Maturity/Refund Type, 24=Tax Provision, 25=Pre-refunded Maturity Date, 26=Industry
+    const nextCallDate=(f[9]||'').trim();
+    const nextCallYear=parseDate(nextCallDate);
+    const px=parseFloat(f[10])||null;
+    const spLT=cleanRtg(f[11]);
+    const moodyLT=cleanRtg(f[12]);
+    const ytw=parseFloat(f[13])||null;
+    if(!ytw||ytw<1.0||ytw>15){skipped.push(cusip+' (bad yield '+f[13]+')');continue;}
+    const sizeRaw=parseFloat(f[14])||null;
+    const size=sizeRaw?Math.round(sizeRaw/1000)/1000:null; // dollars -> millions
+    const spreadRaw=parseFloat(f[15])||null;
+    const spread=spreadRaw&&spreadRaw>0?Math.round(spreadRaw):null;
+    const sp=spLT||cleanRtg(f[21]); // prefer LT Best Rating, fallback to col 21
+    const moody=moodyLT||cleanRtg(f[22]); // prefer LT Best Rating, fallback to col 22
+    const refundType=(f[23]||'').toUpperCase();
+    const taxProv=(f[24]||'').toUpperCase();
+    const callDate=(f[25]||'').trim();
+    const preRefCallYear=parseDate(callDate);
+    // Use Next Call Date first, then Pre-refunded Maturity Date
+    const rawCallYear=nextCallYear||preRefCallYear||null;
+    const effectiveCallYear=(rawCallYear&&rawCallYear<matYear)?rawCallYear:null;
+    const industry=(f[26]||'').trim();
+    const taxable=!taxProv.includes('TAX-EXEMPT')&&!taxProv.includes('AMT')&&!taxProv.includes('ST TAX-EXEMPT');
+    const amt=taxProv.includes('AMT');
+    // Rating: prefer Moody's, fallback S&P
+    const rating=moody||sp||null;
+    seen.add(cusip);
+    result.push({cusip,issuer,state,cpn,matYear,callYear:effectiveCallYear,
+      ytw,px,spread,size,moody,sp,rating,industry,taxable,amt,
+      notes:f[16]?f[16].trim():''});
+  }
+  return{bonds:result,skipped,msg:`Parsed ${result.length} bonds, skipped ${skipped.length}`};
+}
+
+function showImgrMsg(msg,ok=true){
+  const el=document.getElementById('imgr-msg');
+  el.textContent=msg; el.style.color=ok?'#4ade80':'#f87171'; el.style.display='block';
+  setTimeout(()=>el.style.display='none',5000);
+}
+
+function parseImgrPaste(){
+  const text=document.getElementById('imgr-paste').value.trim();
+  console.log('parseImgrPaste fired, text length:', text.length, 'first 80:', text.slice(0,80));
+  if(!text){showImgrMsg('Nothing to paste',false);return;}
+  const {bonds,skipped,msg}=parseImgrText(text);
+  if(!bonds.length){showImgrMsg('No valid bonds found — check format',false);return;}
+  const r=addBonds(bonds);
+  const sc=document.getElementById('imgr-summary');
+  const scc=document.getElementById('imgr-summary-content');
+  sc.style.display='block';
+  const parts=[];
+  if(r.added)parts.push(`${r.added} new`);
+  if(r.updated)parts.push(`${r.updated} updated`);
+  if(r.dupes)parts.push(`${r.dupes} unchanged`);
+  if(skipped.length)parts.push(`${skipped.length} skipped`);
+  const summary=parts.join(' · ')||'nothing changed';
+  showImgrMsg(`✓ IMGR: ${summary}`);
+  scc.innerHTML=`<div>${summary}</div>`
+    +(skipped.length?`<div style="color:#6a8fad;font-size:10px;margin-top:4px;">${skipped.slice(0,8).join(' · ')}${skipped.length>8?` +${skipped.length-8} more`:''}</div>`:'');
+  switchTab('analyzer',document.querySelectorAll('.tab')[0]);
+}
+
+function dDropImgr(e){
+  e.preventDefault();
+  document.getElementById('imgr-drop').classList.remove('dragover');
+  const files=Array.from(e.dataTransfer.files);
+  if(files.length)processImgrFile(files[0]);
+}
+
+function loadImgrFile(e){
+  if(e.target.files[0])processImgrFile(e.target.files[0]);
+  e.target.value='';
+}
+
+function processImgrFile(file){
+  const isXlsx=/\.(xlsx|xls)$/i.test(file.name);
+  const finish=(text)=>{
+    try{
+      const {bonds,skipped,msg}=parseImgrText(text);
+      if(!bonds.length){showImgrMsg('No valid bonds found — check format or paste instead',false);return;}
+      const r=addBonds(bonds);
+      const sc=document.getElementById('imgr-summary');
+      const scc=document.getElementById('imgr-summary-content');
+      sc.style.display='block';
+      const parts=[];
+      if(r.added)parts.push(`${r.added} new`);
+      if(r.updated)parts.push(`${r.updated} updated`);
+      if(r.dupes)parts.push(`${r.dupes} unchanged`);
+      if(skipped.length)parts.push(`${skipped.length} skipped`);
+      const summary=parts.join(' · ')||'nothing changed';
+      showImgrMsg(`✓ IMGR: ${summary}`);
+      scc.innerHTML=`<div>${summary}</div>`
+        +(skipped.length?`<div style="color:#6a8fad;font-size:10px;margin-top:4px;">${skipped.slice(0,8).join(' · ')}${skipped.length>8?` +${skipped.length-8} more`:''}</div>`:'');
+      switchTab('analyzer',document.querySelectorAll('.tab')[0]);
+    }catch(err){showImgrMsg('Parse error: '+err.message,false);}
+  };
+  if(isXlsx){
+    const reader=new FileReader();
+    reader.onerror=()=>showImgrMsg('File read error',false);
+    reader.onload=ev=>{
+      try{
+        const wb=XLSX.read(ev.target.result,{type:'array'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        finish(XLSX.utils.sheet_to_csv(ws,{FS:'\t',RS:'\n'}));
+      }catch(e){showImgrMsg('Excel parse error: '+e.message,false);}
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    // Try text first; if it looks like binary xlsx, retry as arraybuffer
+    const reader=new FileReader();
+    reader.onerror=()=>showImgrMsg('File read error',false);
+    reader.onload=ev=>{
+      const text=ev.target.result;
+      // If file has no tabs but has commas, it may be CSV — still works
+      if(text.includes('\t')||text.includes(',')){finish(text);}
+      else{showImgrMsg('File appears empty or wrong format — try paste instead',false);}
+    };
+    reader.readAsText(file);
+  }
+}
+
+function parseBloombergBonds(rawText){
+  const dbg=[];
+  const text=rawText.replace(/[^\x00-\x7F]/g," ").replace(/\{[^}]+\}/g," ").trim();
+  dbg.push("CLEANED (first 200): "+text.replace(/[ \t]+/g,' ').slice(0,200));
+  let result;
+  if(isConcatRunTable(text)){
+    dbg.push("MODE: Concatenated Run Table");
+    result=parseConcatRun(text,dbg);
+  } else if(isCusipSzIssuerStRun(text)){
+    dbg.push("MODE: CUSIP-Sz-Issuer-St Run");
+    result=parseCusipSzIssuerStRun(text,dbg);
+  } else if(isSzIssuerCusipRun(text)){
+    dbg.push("MODE: Sz-Issuer-CUSIP Run");
+    result=parseSzIssuerCusipRun(text,dbg);
+  } else if(isSpreadSuffixRun(text)){
+    dbg.push("MODE: Spread-Suffix Run");
+    result=parseSpreadSuffixRun(text,dbg);
+  } else if(isNotesRunTable(text)){
+    dbg.push("MODE: Notes Run");
+    result=parseNotesRun(text,dbg);
+  } else if(isGasPrepayRun(text)){
+    dbg.push("MODE: Gas Prepay Run");
+    result=parseGasPrepayRun(text,dbg);
+  } else if(isStSecIssuerRun(text)){
+    dbg.push("MODE: St-Sec-Issuer Run");
+    result=parseStSecIssuerRun(text,dbg);
+  } else if(isSecIssuerMoodyRun(text)){
+    dbg.push("MODE: Sec-Issuer-Moody Run");
+    result=parseSecIssuerMoodyRun(text,dbg);
+  } else if(isStSecIssuerRun(text)){
+    dbg.push("MODE: St-Sec-Issuer Run");
+    result=parseStSecIssuerRun(text,dbg);
+  } else if(isHousingBidRun(text)){
+    dbg.push("MODE: Housing Bid Run");
+    result=parseHousingBidRun(text,dbg);
+  } else if(isTkrRunTable(text)){
+    dbg.push("MODE: Tkr Run Table");
+    result=parseTkrRun(text,dbg);
+  } else if(isSzStateRunTable(text)){
+    dbg.push("MODE: Sz-State Run Table");
+    result=parseSzStateRun(text,dbg);
+  } else if(isObligorRunTable(text)){
+    dbg.push("MODE: Obligor Run Table");
+    result=parseObligorRun(text,dbg);
+  } else if(isNoStateRunTable(text)){
+    dbg.push("MODE: No-State Run Table");
+    result=parseNoStateRun(text,dbg);
+  } else if(isFormattedRunTable(text)){
+    dbg.push("MODE: Formatted Run Table");
+    result=parseFormattedRun(text,dbg);
+  } else {
+    const cleanText=text.replace(/[ \t]+/g," ");
+    if(isRunTableFormat(cleanText)){
+      dbg.push("MODE: Bloomberg Run Table");
+      result=parseRunTable(cleanText,dbg);
+    } else {
+      dbg.push("MODE: MSG / Single Offering");
+      result=parseMsgFormat(cleanText,dbg);
+    }
+  }
+  dbg.push("PARSED: "+result.length+" bonds");
+  document.getElementById("debug-box").textContent=dbg.join("\n");
+  return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ANALYZE
+// ─────────────────────────────────────────────────────────────────────────────
+function buildBondRecord(b,time){
+  const mmdCalc=getMMD(b.matYear); // always spread to maturity
+  const mmdVal=mmdCalc;
+  const tsyVal=interpolateTsy(b.matYear);
+  const ytw=b.ytw!=null?b.ytw:(b.spread!=null&&mmdCalc!=null?+(mmdCalc+b.spread/100).toFixed(3):null);
+  const spread=b.spread!=null?b.spread:(ytw!=null&&mmdCalc!=null?Math.round((ytw-mmdCalc)*100):null);
+  const ratio=ytw!=null&&tsyVal?Math.round((ytw/tsyVal)*100):null;
+  const rating=getInsuredRating(b.issuer,b.notes)||b.rating||lookupRating(b.issuer);
+  const rc=b.taxable?{label:'TAX',cls:'badge-tax'}:(spread!=null?richOrCheap(spread,rating,b.issuer,b.cusip,b.taxable):null);
+  const sector=detectSector(b.issuer,b.cusip,b.taxable,b.amt);
+  const sectorLabel=sector?sector.replace('airportAMT','Airport AMT').replace('airportNonAMT','Airport').replace('gasPrepay','Gas Prepay').replace('hospital','Hospital').replace('housing','Housing').replace('water','Water').replace('univ','Higher Ed').replace('toll','Transport').replace('cops','COPs').replace('salesTax','Sales Tax').replace('go','GO'):null;
+  const bvalSig=getBvalSignal({...b,ytw,rating,sector:sectorLabel,sectorKey:sector,matYear:b.matYear});
+  return{...b,ytw,mmdVal,tsyVal,spread,ratio,rating,rc,rcLabel:rc?rc.label:'',time,sector:sectorLabel,sectorKey:sector,bvalDiff:bvalSig?bvalSig.diff:null,bvalLabel:bvalSig?bvalSig.label:null};
+}
+
+// updatedCusips: flash yellow on price-updated bonds
+let updatedCusips=new Set();
+
+function addBonds(parsed){
+  newCusips.clear(); updatedCusips.clear();
+  let added=0,dupes=0,updated=0;
+  const time=nowTime();
+  for(const b of parsed){
+    const existIdx=bonds.findIndex(x=>x.cusip===b.cusip);
+    if(existIdx===-1){
+      // New bond
+      bonds.push(buildBondRecord(b,time));
+      newCusips.add(b.cusip); added++;
+    } else {
+      const ex=bonds[existIdx];
+      const newYtw=b.ytw!=null?b.ytw:ex.ytw;
+      if(newYtw!=null && ex.ytw!=null && Math.abs(newYtw-ex.ytw)<0.001){
+        dupes++; // same price, skip
+      } else {
+        // Price changed — update in place, preserve time if no change
+        bonds[existIdx]=buildBondRecord(b,time);
+        updatedCusips.add(b.cusip); updated++;
+      }
+    }
+  }
+  // Sort by time descending so newest appear first
+  sortCol='time'; sortDir=-1;
+  renderTable(); updateStats(); saveBonds();
+  setTimeout(()=>{newCusips.clear();updatedCusips.clear();renderTable();},3000);
+  return{added,dupes,updated};
+}
+
+function analyze(){
+  const raw=document.getElementById("paste-input").value;
+  const parsed=parseBloombergBonds(raw);
+  document.getElementById("error-box").style.display="none";
+  document.getElementById("info-box").style.display="none";
+  if(!parsed.length){
+    document.getElementById("error-box").style.display="block";
+    document.getElementById("debug-box").style.display="block";
+    debugVisible=true; return;
+  }
+  document.getElementById("paste-input").value="";
+  const {added,dupes,updated}=addBonds(parsed);
+  const ib=document.getElementById("info-box");
+  ib.style.display="block";
+  const parts=[];
+  if(added)parts.push(`${added} added`);
+  if(updated)parts.push(`${updated} updated`);
+  if(dupes)parts.push(`${dupes} unchanged`);
+  ib.textContent=`✓ ${parts.join(' · ')||'no changes'} · ${nowTime()}`;
+}
+
+function editBondCall(cusip){
+  const b=bonds.find(x=>x.cusip===cusip);
+  if(!b)return;
+  const idx=bonds.findIndex(x=>x.cusip===cusip);
+  if(idx===-1)return;
+
+  // Build modal HTML
+  const modal=document.createElement('div');
+  modal.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML=`
+    <div style="background:#0d1f2d;border:1px solid #2a4a6b;border-radius:8px;padding:24px;min-width:320px;color:#e2e8f0;">
+      <div style="font-weight:700;font-size:14px;margin-bottom:16px;color:#38bdf8;">${b.issuer||cusip}</div>
+      <div style="display:grid;gap:10px;">
+        <label style="font-size:11px;color:#94a3b8;">YIELD (YTW)
+          <input id="edit-ytw" type="number" step="0.01" value="${b.ytw!=null?b.ytw:''}" style="display:block;width:100%;margin-top:4px;background:#071520;border:1px solid #2a4a6b;color:#e2e8f0;padding:6px 8px;border-radius:4px;font-size:13px;">
+        </label>
+        <label style="font-size:11px;color:#94a3b8;">CALL YEAR (blank = NC)
+          <input id="edit-call" type="number" value="${b.callYear||''}" style="display:block;width:100%;margin-top:4px;background:#071520;border:1px solid #2a4a6b;color:#e2e8f0;padding:6px 8px;border-radius:4px;font-size:13px;">
+        </label>
+        <label style="font-size:11px;color:#94a3b8;">RATING
+          <input id="edit-rating" type="text" value="${b.rating||''}" style="display:block;width:100%;margin-top:4px;background:#071520;border:1px solid #2a4a6b;color:#e2e8f0;padding:6px 8px;border-radius:4px;font-size:13px;">
+        </label>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:18px;">
+        <button id="edit-save" style="flex:1;background:#1a4a6b;color:#e2e8f0;border:none;padding:8px;border-radius:4px;cursor:pointer;font-weight:700;">SAVE</button>
+        <button id="edit-cancel" style="flex:1;background:#1a2a3a;color:#94a3b8;border:none;padding:8px;border-radius:4px;cursor:pointer;">CANCEL</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  document.getElementById('edit-cancel').onclick=()=>document.body.removeChild(modal);
+  modal.onclick=(e)=>{if(e.target===modal)document.body.removeChild(modal);};
+
+  document.getElementById('edit-save').onclick=()=>{
+    const newYtw=parseFloat(document.getElementById('edit-ytw').value)||b.ytw||null;
+    const newCall=parseInt(document.getElementById('edit-call').value)||null;
+    const newRating=document.getElementById('edit-rating').value.trim()||b.rating||null;
+    document.body.removeChild(modal);
+    const updated={...b,ytw:newYtw,callYear:newCall,rating:newRating};
+    const mmdCalc=getMMD(updated.matYear);
+    const mmdVal=mmdCalc;
+    const tsyVal=interpolateTsy(updated.matYear);
+    const spread=newYtw!=null&&mmdCalc!=null?Math.round((newYtw-mmdCalc)*100):null;
+    const ratio=newYtw!=null&&tsyVal?Math.round((newYtw/tsyVal)*100):null;
+    const rc=updated.taxable?{label:'TAX',cls:'badge-tax'}:(spread!=null?richOrCheap(spread,newRating,updated.issuer,updated.cusip,updated.taxable):null);
+    bonds[idx]={...updated,mmdVal,tsyVal,spread,ratio,rc,rcLabel:rc?rc.label:''};
+    renderTable();updateStats();saveBonds();
+  };
+}
+
+function removeBond(cusip){
+  bonds=bonds.filter(b=>b.cusip!==cusip);
+  renderTable(); updateStats(); saveBonds();
+  if(!bonds.length){
+    document.getElementById("table-wrap").style.display="none";
+    document.getElementById("stats-section").style.display="none";
+    document.getElementById("bond-count").textContent="";
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RENDER TABLE
+// ─────────────────────────────────────────────────────────────────────────────
+function generateColor(b, rc, compRC, bvSignal) {
+  const rtg = b.rating||'';
+  const sector = b.sector||'';
+  const spread = b.spread!=null?(b.spread>0?'+':'')+b.spread+'bps':'';
+  const bandLabel = rc&&rc.label?rc.label:'—';
+  const compLabel = compRC&&compRC!=='—'?compRC:'';
+  const bvLabel = bvSignal&&bvSignal.label?bvSignal.label:'';
+
+  // Lead with band signal
+  let color = bandLabel==='CHEAP' ? 'Cheap' : bandLabel==='RICH' ? 'Rich' : 'Fair';
+
+  // Rating + sector context
+  const ratingCtx = rtg ? rtg : '';
+  const sectorCtx = sector && sector!=='—' ? sector : '';
+  const ctx = [ratingCtx, sectorCtx].filter(Boolean).join(' ');
+
+  // Spread context
+  const spreadCtx = b.spread!=null ? `${spread} to MMD` : '';
+
+  // Build one-liner
+  let line = color;
+  if(ctx) line += ` — ${ctx}`;
+  if(spreadCtx) line += `, ${spreadCtx}`;
+
+  // Add nuance based on signals
+  if(bandLabel==='CHEAP' && bvLabel==='CHEAP') line += '. Confirmed by BVAL.';
+  else if(bandLabel==='CHEAP' && bvLabel==='RICH') line += '. But BVAL disagrees.';
+  else if(bandLabel==='FAIR' && bvLabel==='CHEAP') line += '. BVAL sees value.';
+  else if(bandLabel==='RICH') line += '. Paying up for the name.';
+
+  // Comp color
+  if(compLabel.includes('CHEAP')) line += ' Comps confirm.';
+  else if(compLabel.includes('RICH')) line += ' Comps say rich.';
+
+  return line;
+}
+
+function renderTable(){
+  const RC_ORDER={CHEAP:0,FAIR:1,RICH:2,TAX:3,NR:4,'':-1};
+  // Pre-compute compDiff for sorting
+  const compDiffMap=new Map();
+  bonds.forEach(b=>{
+    const {comps}=findComps(b);
+    if(comps.length>=2&&b.ytw!=null){
+      const avg=comps.reduce((s,c)=>s+c.yield,0)/comps.length;
+      compDiffMap.set(b.cusip,Math.round((b.ytw-avg)*100));
+    }
+  });
+  const sorted=[...bonds].sort((a,b)=>{
+    if(!sortCol)return 0;
+    if(sortCol==='rcLabel'){
+      const ao=RC_ORDER[a.rcLabel]??5, bo=RC_ORDER[b.rcLabel]??5;
+      return(ao-bo)*sortDir;
+    }
+    if(sortCol==='compDiff'){
+      const ao=compDiffMap.has(a.cusip)?compDiffMap.get(a.cusip):null;
+      const bo=compDiffMap.has(b.cusip)?compDiffMap.get(b.cusip):null;
+      if(ao===null&&bo===null)return 0;
+      if(ao===null)return 1;
+      if(bo===null)return -1;
+      return(bo-ao)*sortDir;
+    }
+    const av=a[sortCol],bv=b[sortCol];
+    if(av==null)return 1; if(bv==null)return-1;
+    if(typeof av==='string')return av.localeCompare(bv)*sortDir;
+    return(av>bv?1:-1)*sortDir;
+  });
+
+  document.getElementById("bond-tbody").innerHTML=sorted.map(b=>{
+    const rc=b.rc||{label:"—",cls:""};
+    const ratioColor=b.ratio==null?"#2d5475":b.ratio<80?"#f87171":b.ratio>90?"#4ade80":"#fbbf24";
+    const spreadClass=b.spread==null?"":b.spread>0?"spread-pos":"spread-neg";
+    const ratingDisplay=b.moody&&b.sp&&b.moody!=='N.A.'&&b.sp!=='N.A.'
+      ? `<span style="color:#38bdf8;font-weight:700">${b.moody}/${b.sp}</span>`
+      : b.rating
+        ? `<span style="color:#38bdf8;font-weight:700">${b.rating}</span>`
+        : `<button class="btn-add-rtg" onclick="prefillRating('${b.issuer}')">+ RTG</button>`;
+
+    // 52W history
+    const hist=emmaHistory[b.cusip];
+    const hs=histSpread(hist,b.matYear);
+    const lastTrade=hist&&hist.lastDate?`<span class="hist-val" style="font-size:10px;">${hist.lastDate}</span>`:'<span class="hist-na">—</span>';
+
+    // Context vs 52W avg
+    let ctx='';
+    if(b.spread!=null&&hs.avg!=null){
+      const d=b.spread-hs.avg;
+      if(d>10)ctx=`<span class="pill pill-cheap">+${d}vs avg</span>`;
+      else if(d<-10)ctx=`<span class="pill pill-rich">${d}vs avg</span>`;
+    }
+
+    // Comps count + comp-based rich/cheap
+    const {comps,total:compTotal}=findComps(b);
+    const compLabel=compTotal>comps.length?`${compTotal}`:comps.length>0?`${comps.length}`:'0';
+    const compCell=bulkTrades.length
+      ? comps.length>0
+        ? `<button class="btn-comp" onclick="showComps('${b.cusip}')">${compLabel} COMPS</button>`
+        : `<span class="hist-na">0</span>`
+      : `<span class="hist-na">—</span>`;
+
+    // Comp R/C — compare bond's yield to average yield of comps
+    let compRC='—', compDiff=null;
+    if(comps.length>=2 && b.ytw!=null){
+      const avgCompYtw=comps.reduce((s,c)=>s+c.yield,0)/comps.length;
+      compDiff=Math.round((b.ytw-avgCompYtw)*100); // bps
+      if(compDiff>=8) compRC=`<span class="badge pill-cheap">+${compDiff} CHEAP</span>`;
+      else if(compDiff<=-8) compRC=`<span class="badge pill-rich">${compDiff} RICH</span>`;
+      else compRC=`<span style="color:#4a7fa5;font-size:10px;">FAIR ${compDiff>0?'+':''}${compDiff}</span>`;
+    }
+
+    return`<tr class="${newCusips.has(b.cusip)?"new-row":updatedCusips.has(b.cusip)?"updated-row":""}">
+      <td style="white-space:nowrap"><button class="btn-remove" onclick="removeBond('${b.cusip}')">✕</button><button class="btn-edit" onclick="editBondCall('${b.cusip}')" title="Edit bond">✎</button></td>
+      <td class="time-cell">${b.time||"—"}</td>
+      <td class="cusip">${b.cusip}</td>
+      <td class="issuer-cell" title="${b.issuer||''}">${b.issuer||"—"}</td>
+      <td style="color:#4a7fa5;text-align:right">${b.size!=null?(b.size>=1?b.size.toFixed(1):b.size.toFixed(2)):"—"}</td>
+      <td>${ratingDisplay}</td>
+      <td style="color:#7ca5c8">${b.cpn!=null?b.cpn.toFixed(3):"—"}</td>
+      <td>${b.matYear||"—"}</td>
+      <td style="color:#4a7fa5">${b.callYear||"NC"}</td>
+      <td style="color:var(--text-muted);font-size:11px">${b.sector||"—"}</td>
+      <td style="font-weight:700">${b.ytw!=null?b.ytw.toFixed(2)+"%":"—"}</td>
+      <td style="color:#4a7fa5">${b.mmdVal!=null?b.mmdVal.toFixed(2)+"%":"—"}</td>
+      <td class="${spreadClass}">${b.spread!=null?(b.spread>0?"+":"")+b.spread:"—"}${ctx}</td>
+      <td style="font-weight:700;color:${ratioColor}">${b.ratio!=null?b.ratio+"%":"—"}</td>
+      <td>${(()=>{
+        const bv=getBvalSignal(b);
+        const color=generateColor(b,rc,compRC,bv);
+        const badge=rc.cls?`<span class="badge ${rc.cls}">${rc.label}</span>`:'—';
+        return `<span class="color-wrap" title="${color}">${badge}</span>`;
+      })()}</td>
+      <td>${(()=>{
+        const bv=getBvalSignal(b)||{diff:b.bvalDiff,label:b.bvalLabel};
+        const bvalLoaded=Object.keys(bvalCurves).length>0;
+        const hasSector=!!(b.sectorKey);
+        if(!bv||bv.label==null){
+          // No signal — diagnose why
+          if(!bvalLoaded) return '<span style="color:var(--text-dim)">—</span>'; // curves not loaded, silent
+          if(!hasSector) return '<span style="color:var(--text-dim)">—</span>'; // no sector, silent
+          // Show debug info on hover
+          const sKey=b.sectorKey||b.sector||'?';
+          const rtg=b.rating||'?';
+          const r=rtg.split('/')[0];
+          return `<span style="color:#f59e0b;font-size:10px;cursor:help;" title="No BVAL: sector=${sKey} rating=${r}">?</span>`;
+        }
+        const lbl=bv.label.toUpperCase();
+        const sign=bv.diff>0?'+':'';
+        if(lbl==='CHEAP') return `<span class="badge pill-cheap">${sign}${bv.diff} CHEAP</span>`;
+        if(lbl==='RICH') return `<span class="badge pill-rich">EXP ${sign}${bv.diff}</span>`;
+        return `<span style="color:#4a7fa5;font-size:10px;">FAIR ${sign}${bv.diff}</span>`;
+      })()}</td>
+      <td class="comp-divider">${compCell}</td>
+      <td>${compRC}</td>
+    </tr>`;
+  }).join("");
+
+  document.getElementById("table-wrap").style.display=bonds.length?"block":"none";
+  document.getElementById("bond-count").textContent=bonds.length+" BOND"+(bonds.length!==1?"S":"")+" IN LIST";
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPS MODAL
+// ─────────────────────────────────────────────────────────────────────────────
+function showComps(cusip){
+  const bond=bonds.find(b=>b.cusip===cusip);
+  if(!bond)return;
+  const {comps,total:compTotal}=findComps(bond,12);
+  document.getElementById('modal-title').textContent=`MARKET COMPS — ${bond.cusip} (${bond.issuer||''}  ${bond.matYear||''})`;
+
+  const mmdVal=bond.mmdVal||getMMD(bond.matYear); // always spread to maturity
+
+  let html=`
+    <div style="background:#080c14;border:1px solid #1a2d45;border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:11px;">
+      <div style="color:#1e3a5f;font-size:9px;letter-spacing:2px;margin-bottom:8px;">YOUR BOND</div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;">
+        <span><span style="color:#1e3a5f">CPN </span><span style="color:#7ca5c8;font-weight:700">${bond.cpn?bond.cpn.toFixed(3):'—'}</span></span>
+        <span><span style="color:#1e3a5f">MAT </span><span style="color:#c9d8f0;font-weight:700">${bond.matYear||'—'}</span></span>
+        <span><span style="color:#1e3a5f">YTW </span><span style="color:#c9d8f0;font-weight:700">${bond.ytw?bond.ytw.toFixed(2)+'%':'—'}</span></span>
+        <span><span style="color:#1e3a5f">SPRD </span><span style="${bond.spread>0?'color:#4ade80':'color:#f87171'};font-weight:800">${bond.spread!=null?(bond.spread>0?'+':'')+bond.spread:'—'}</span></span>
+        <span><span style="color:#1e3a5f">RTG </span><span style="color:#38bdf8;font-weight:700">${bond.rating||'NR'}</span></span>
+      </div>
+    </div>`;
+
+  if(!comps.length){
+    html+=`<div style="color:#4a7fa5;font-size:11px;padding:16px;">No comps found within ±3yr maturity / ±0.75% yield range in the loaded trade file.</div>`;
+  } else {
+    html+=`
+    <div style="font-size:10px;color:#1e3a5f;letter-spacing:1.5px;margin-bottom:8px;">
+      ${comps.length} COMPARABLE TRADES${compTotal>comps.length?` (${compTotal} TOTAL MATCHES)`:''} · MAT ±3YR · YIELD ±0.40% · DATE: ${bulkTradeDate}
+    </div>
+    <div style="overflow-x:auto;">
+    <table class="comp-table">
+      <thead><tr>
+        <th>CUSIP</th><th>DESCRIPTION</th><th>CPN</th><th>MAT</th><th>YIELD</th><th>SPRD TO MMD</th><th>PAR ($K)</th><th>VS YOUR BOND</th>
+      </tr></thead>
+      <tbody>`;
+
+    comps.forEach(c=>{
+      const cMmd=getMMD(c.matYear);
+      const cSpread=c.yield&&cMmd?Math.round((c.yield-cMmd)*100):null;
+      const vs=bond.spread!=null&&cSpread!=null?cSpread-bond.spread:null;
+      const vsColor=vs==null?'#2d5475':vs>0?'#4ade80':'#f87171';
+      const parK=c.par?Math.round(c.par/1000):null;
+      html+=`<tr>
+        <td style="color:#38bdf8;font-weight:700">${c.cusip}</td>
+        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#c9d8f0" title="${c.desc}">${c.desc||'—'}</td>
+        <td style="color:#7ca5c8">${c.cpn?c.cpn.toFixed(3):'—'}</td>
+        <td>${c.matYear||'—'}</td>
+        <td style="font-weight:700">${c.yield?c.yield.toFixed(2)+'%':'—'}</td>
+        <td style="color:#a78bfa;font-weight:700">${cSpread!=null?(cSpread>0?'+':'')+cSpread:'—'}</td>
+        <td style="color:#4a7fa5">${parK!=null?parK.toLocaleString():'—'}</td>
+        <td style="font-weight:700;color:${vsColor}">${vs!=null?(vs>0?'+':'')+vs+' bps':'—'}</td>
+      </tr>`;
+    });
+
+    html+=`</tbody></table></div>
+    <div style="margin-top:12px;font-size:10px;color:#1e3a5f;">
+      SPRD TO MMD uses current MMD curve as approximation for trade date MMD.
+      VS YOUR BOND = comp spread minus your bond spread (positive = comp is wider/cheaper).
+    </div>`;
+  }
+
+  document.getElementById('modal-body').innerHTML=html;
+  document.getElementById('comp-modal').classList.add('show');
+}
+
+function closeModal(){document.getElementById('comp-modal').classList.remove('show');}
+document.getElementById('comp-modal').addEventListener('click',function(e){if(e.target===this)closeModal();});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATS / SORT / CLEAR
+// ─────────────────────────────────────────────────────────────────────────────
+function updateStats(){
+  const ws=bonds.filter(b=>b.spread!=null);
+  if(!ws.length){document.getElementById("stats-section").style.display="none";return;}
+  const cheap=bonds.filter(b=>b.rc&&b.rc.label==="CHEAP").length;
+  const rich=bonds.filter(b=>b.rc&&b.rc.label==="RICH").length;
+  const fair=bonds.filter(b=>b.rc&&b.rc.label==="FAIR").length;
+  const avg=Math.round(ws.reduce((a,b)=>a+b.spread,0)/ws.length);
+  document.getElementById("stats-bar").innerHTML=`
+    <div class="stat"><span class="stat-val" style="color:#4ade80">${cheap}</span><span class="stat-lbl">CHEAP</span></div>
+    <div class="stat"><span class="stat-val" style="color:#fbbf24">${fair}</span><span class="stat-lbl">FAIR</span></div>
+    <div class="stat"><span class="stat-val" style="color:#f87171">${rich}</span><span class="stat-lbl">RICH</span></div>
+    <div class="stat"><span class="stat-val">${bonds.length}</span><span class="stat-lbl">TOTAL</span></div>
+    <div class="stat"><span class="stat-val">${avg>0?"+":""}${avg}</span><span class="stat-lbl">AVG SPRD</span></div>
+    <div class="stat"><span class="stat-val" style="color:#a78bfa">${Object.keys(emmaHistory).length}</span><span class="stat-lbl">EMMA</span></div>
+    <div class="stat"><span class="stat-val" style="color:#f59e0b">${bulkTrades.length?bulkTrades.length.toLocaleString():'0'}</span><span class="stat-lbl">COMPS DB</span></div>
+  `;
+  document.getElementById("stats-section").style.display="block";
+}
+
+function sortBy(col){if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=1;}renderTable();}
+
+function saveBonds(){
+  try{localStorage.setItem('px-bonds',JSON.stringify(bonds));}catch(e){}
+}
+function loadBonds(){
+  try{
+    // Load saved BVAL curves
+    const savedBval=localStorage.getItem('projectx-bval');
+    if(savedBval){try{const b=JSON.parse(savedBval);bvalCurves=b.curves||{};bvalDate=b.date||null;}catch(e){}}
+
+    const saved=localStorage.getItem('px-bonds');
+    if(!saved)return;
+    bonds=JSON.parse(saved);
+    bonds=bonds.map(b=>{
+      const mmdCalc=getMMD(b.matYear); // always spread to maturity
+      const mmdVal=mmdCalc;
+      const spread=b.spread!=null?b.spread:(b.ytw!=null&&mmdCalc!=null?Math.round((b.ytw-mmdCalc)*100):null);
+      const rating=getInsuredRating(b.issuer,b.notes)||b.rating||lookupRating(b.issuer);
+      const rc=b.taxable?{label:'TAX',cls:'badge-tax'}:(spread!=null?richOrCheap(spread,rating,b.issuer,b.cusip,b.taxable):null);
+      return{...b,mmdVal,spread,rating,rc,rcLabel:rc?rc.label:''};
+    });
+    if(bonds.length){renderTable();updateStats();}
+  }catch(e){bonds=[];}
+}
+function recalcAll(){
+  if(!bonds.length)return;
+  bonds=bonds.map(b=>{
+    const rating=b.rating||lookupRating(b.issuer)||null;
+    const mmdCalc=getMMD(b.matYear);
+    const mmdVal=mmdCalc;
+    const tsyVal=interpolateTsy(b.matYear);
+    const spread=b.ytw!=null&&mmdVal!=null?Math.round((b.ytw-mmdVal)*100):b.spread;
+    const ratio=b.ytw!=null&&tsyVal?Math.round((b.ytw/tsyVal)*100):b.ratio;
+    const rc=b.taxable?{label:'TAX',cls:'badge-tax'}:(spread!=null?richOrCheap(spread,rating,b.issuer,b.cusip,b.taxable):null);
+    const sector=detectSector(b.issuer,b.cusip,b.taxable,b.amt);
+    const sectorLabel=sector?sector
+      .replace('airportAMT','Airport AMT')
+      .replace('airportNonAMT','Airport')
+      .replace('gasPrepay','Gas Prepay')
+      .replace('hospital','Hospital')
+      .replace('housing','Housing')
+      .replace('water','Water')
+      .replace('univ','Higher Ed')
+      .replace('toll','Transport')
+      .replace('cops','COPs')
+      .replace('salesTax','Sales Tax')
+      .replace('go','GO'):null;
+    const bvalSig2=getBvalSignal({...b,rating,sector:sectorLabel,sectorKey:sector});
+    return{...b,rating,mmdVal,tsyVal,spread,ratio,rc,rcLabel:rc?rc.label:'',sector:sectorLabel,sectorKey:sector,bvalDiff:bvalSig2?bvalSig2.diff:null,bvalLabel:bvalSig2?bvalSig2.label:null};
+  });
+  renderTable();updateStats();saveBonds();
+  const ib=document.getElementById('info-box');if(ib){ib.textContent=`↺ Recalculated ${bonds.length} bonds`;ib.style.display='block';setTimeout(()=>ib.style.display='none',2500);}
+}
+
+function clearAll(){
+  if(bonds.length&&!confirm("Clear all "+bonds.length+" bonds?"))return;
+  bonds=[];newCusips.clear();localStorage.removeItem('px-bonds');
+  document.getElementById("paste-input").value="";
+  ["error-box","info-box","table-wrap","stats-section"].forEach(id=>document.getElementById(id).style.display="none");
+  document.getElementById("bond-count").textContent="";
+  document.getElementById("debug-box").textContent="";
+}
+function toggleDebug(){debugVisible=!debugVisible;document.getElementById("debug-box").style.display=debugVisible?"block":"none";}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MMD
+// ─────────────────────────────────────────────────────────────────────────────
+function parseTsyScreen(text){
+  const TENORS=[1,2,3,5,7,10,20,30];
+  const results={};
+
+  // Detect BQNT format: "2yr: 3.563" or "10yr: 4.131"
+  const bqntLines=text.split('\n').filter(l=>/^\s*\d+yr\s*:\s*[\d.]+/.test(l));
+  if(bqntLines.length>=3){
+    for(const line of bqntLines){
+      const m=line.match(/(\d+)yr\s*:\s*([\d.]+)/);
+      if(!m)continue;
+      const tenor=parseInt(m[1]);
+      const yield_=parseFloat(m[2]);
+      if(TENORS.includes(tenor)&&yield_>1&&yield_<10)
+        results[tenor]={tenor,yield:yield_,isWI:false};
+    }
+    return results;
+  }
+
+  const CUR_YEAR=new Date().getFullYear();
+  for(const line of text.split('\n')){
+    // Skip WIT WI (when-issued) lines
+    const isWI=/^\s*WIT\s+WI/i.test(line)||/^\s*WI\s/i.test(line);
+    if(isWI)continue;
+
+    let matYear=null, tenor=null;
+
+    // Format 1: MM/DD/YY (e.g. 02/29/28)
+    const matM1=line.match(/(\d{2})\/\d{2}\/(\d{2})\b/);
+    // Format 2: MM/YY (e.g. 02/28 = Feb 2028)
+    const matM2=!matM1&&line.match(/\b(\d{2})\/(\d{2})\b(?!\/)/);
+
+    if(matM1){
+      matYear=2000+parseInt(matM1[2]);
+    } else if(matM2){
+      matYear=2000+parseInt(matM2[2]);
+    } else continue;
+
+    tenor=matYear-CUR_YEAR;
+    if(tenor<1||tenor>35)continue;
+
+    const yields=[...line.matchAll(/\b([3-6]\.\d{3})\b/g)].map(m=>parseFloat(m[1])).filter(v=>v>=1&&v<7);
+    if(!yields.length)continue;
+    // Take last yield — avoids coupon fractions bleeding in from left side
+    const yield_=yields[yields.length-1];
+    const nearest=TENORS.reduce((a,b)=>Math.abs(b-tenor)<Math.abs(a-tenor)?b:a);
+    const existing=results[nearest];
+    if(!existing||Math.abs(tenor-nearest)<Math.abs((existing.tenor||99)-nearest)){
+      results[nearest]={tenor,matYear,yield:yield_,isWI:false};
+    }
+  }
+  return results;
+}
+
+function applyTsy(){
+  const text=document.getElementById('tsy-paste').value.trim();
+  const m=document.getElementById('tsy-msg');
+  if(!text){m.textContent='Nothing to parse';m.style.color='#f87171';m.style.display='block';setTimeout(()=>m.style.display='none',3000);return;}
+  const parsed=parseTsyScreen(text);
+  const updated=Object.keys(parsed).length;
+  if(!updated){m.textContent='No yields found — check format';m.style.color='#f87171';m.style.display='block';setTimeout(()=>m.style.display='none',3000);return;}
+  for(const[t,v]of Object.entries(parsed))FALLBACK_TSY[parseInt(t)]=v.yield;
+  // Recalc tsyVal and ratio on all bonds
+  bonds=bonds.map(b=>{
+    const tsyVal=interpolateTsy(b.matYear);
+    const ratio=b.ytw!=null&&tsyVal?Math.round((b.ytw/tsyVal)*100):null;
+    return{...b,tsyVal,ratio};
+  });
+  renderTable(); updateStats();
+  // Show parsed values
+  const summary=Object.entries(parsed).sort((a,b)=>a[0]-b[0]).map(([t,v])=>`${t}yr: ${v.yield}`).join(' · ');
+  m.textContent=`✓ TSY updated: ${summary}`;m.style.color='#4ade80';m.style.display='block';
+  document.getElementById('tsy-current').textContent=`Current: ${summary}`;
+  setTimeout(()=>m.style.display='none',5000);
+  document.getElementById('tsy-paste').value='';
+}
+
+function applyMMD(){
+  const text=document.getElementById("mmd-text").value;
+  let count=0;
+  console.log('MMD text length:',text.length,'first50:',text.slice(0,50));
+  // Handle both formats: "2027:2.12,2028:2.13" and "2027 2.12" (line by line)
+  const commaFormat=/\d{4}:[\d.]+/g;
+  const commaMatches=text.match(commaFormat);
+  if(commaMatches&&commaMatches.length>3){
+    commaMatches.forEach(pair=>{const[yr,rate]=pair.split(':');if(yr&&rate){mmd[+yr]=parseFloat(rate);count++;}});
+  } else {
+    text.split("\n").forEach(l=>{const m=l.match(/(\d{4})\s+([\d.]+)/);if(m){mmd[+m[1]]=parseFloat(m[2]);count++;}});
+  }
+  const d=document.getElementById("mmd-date-input").value.trim();
+  if(d){mmdDate=d;document.getElementById("mmd-date-hdr").textContent="MMD "+d;document.getElementById("mmd-curve-date").textContent=d;}
+  document.getElementById("mmd-text").value="";document.getElementById("mmd-date-input").value="";
+  bonds=bonds.map(b=>{const mmdCalc=getMMD(b.callYear||b.matYear);const mmdMat=getMMD(b.matYear);const mmdVal=(b.spread!=null&&b.callYear&&b.matYear&&b.matYear!==b.callYear)?mmdMat:mmdCalc;const spread=b.spread!=null?b.spread:(b.ytw!=null&&mmdCalc!=null?Math.round((b.ytw-mmdCalc)*100):null);const rc=b.taxable?{label:'TAX',cls:'badge-tax'}:(spread!=null?richOrCheap(spread,b.rating,b.issuer,b.cusip):null);return{...b,mmdVal,spread,rc,rcLabel:rc?rc.label:''};});
+  if(bonds.length){renderTable();updateStats();}
+  renderMMDGrid();
+  // Confirmation message
+  const msg=document.getElementById('mmd-confirm');
+  if(msg){msg.textContent=`✓ MMD updated — ${count} tenors loaded`;msg.style.display='block';setTimeout(()=>msg.style.display='none',4000);}
+}
+function renderMMDGrid(){
+  document.getElementById("mmd-grid").innerHTML=Object.entries(mmd).sort((a,b)=>+a[0]-+b[0]).map(([yr,rate])=>`<div class="mmd-cell"><span class="mmd-yr">${yr}</span><span class="mmd-rate">${parseFloat(rate).toFixed(2)}%</span></div>`).join("");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RATINGS
+// ─────────────────────────────────────────────────────────────────────────────
+function saveRatingsLocal(){
+  try{
+    localStorage.setItem('projectx-ratings', JSON.stringify(issuerRatings));
+    const msg=document.getElementById('ratings-save-msg');
+    if(msg){msg.style.display='inline';setTimeout(()=>msg.style.display='none',2000);}
+  }catch(e){console.warn('localStorage save failed:',e);}
+}
+
+function loadRatingsLocal(){
+  try{
+    const saved=localStorage.getItem('projectx-ratings');
+    if(saved){issuerRatings=JSON.parse(saved);}
+  }catch(e){console.warn('localStorage load failed:',e);}
+}
+
+function exportRatings(){
+  if(!issuerRatings.length){alert('No ratings to export.');return;}
+  const blob=new Blob([JSON.stringify(issuerRatings,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='project-x-ratings.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function importRatings(e){
+  const file=e.target.files[0];
+  if(!file)return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{
+      const data=JSON.parse(ev.target.result);
+      if(!Array.isArray(data))throw new Error('Invalid format');
+      // Merge — imported ratings win on conflict
+      const existing=new Map(issuerRatings.map(r=>[r.keyword.toUpperCase(),r]));
+      data.forEach(r=>existing.set(r.keyword.toUpperCase(),r));
+      issuerRatings=Array.from(existing.values());
+      saveRatingsLocal();
+      renderRatingTable();
+      if(bonds.length){bonds=bonds.map(b=>{const rating=b.rating||lookupRating(b.issuer);const rc=b.taxable?{label:'TAX',cls:'badge-tax'}:(b.spread!=null?richOrCheap(b.spread,rating,b.issuer,b.cusip,b.taxable):null);return{...b,rating,rc,rcLabel:rc?rc.label:''};});renderTable();updateStats();}
+      const msg=document.getElementById('ratings-save-msg');
+      if(msg){msg.textContent=`✓ ${data.length} ratings imported`;msg.style.display='inline';setTimeout(()=>{msg.style.display='none';msg.textContent='✓ Saved';},3000);}
+    }catch(err){alert('Could not read ratings file. Make sure it\'s a valid Project X ratings export.');}
+  };
+  r.readAsText(file);
+  e.target.value='';
+}
+
+function addRating(){
+  const kw=document.getElementById("new-issuer").value.trim().toUpperCase();
+  const rt=document.getElementById("new-rating").value;
+  if(!kw||!rt){alert("Enter keyword and rating.");return;}
+  issuerRatings=issuerRatings.filter(r=>r.keyword.toUpperCase()!==kw);
+  issuerRatings.unshift({keyword:kw,rating:rt});
+  document.getElementById("new-issuer").value="";document.getElementById("new-rating").value="";
+  saveRatingsLocal();
+  renderRatingTable();
+  if(bonds.length){bonds=bonds.map(b=>{const rating=lookupRating(b.issuer);const rc=b.taxable?{label:'TAX',cls:'badge-tax'}:(b.spread!=null?richOrCheap(b.spread,rating,b.issuer,b.cusip,b.taxable):null);return{...b,rating,rc,rcLabel:rc?rc.label:''};});renderTable();updateStats();}
+}
+function removeRating(i){issuerRatings.splice(i,1);saveRatingsLocal();renderRatingTable();}
+function prefillRating(issuer){
+  document.getElementById("new-issuer").value=issuer.toUpperCase();
+  switchTab('ratings',document.querySelectorAll('.tab')[4]);
+}
+function renderRatingTable(){
+  document.getElementById("rating-tbody").innerHTML=issuerRatings.map((r,i)=>{
+    const band=getFairBand(r.rating,r.keyword);
+    return`<tr><td>${r.keyword}</td><td style="color:#38bdf8;font-weight:700">${r.rating}</td><td style="color:#4a7fa5">${band?"+"+band[0]+" to +"+band[1]+" bps":"—"}</td><td><button class="btn-secondary" onclick="removeRating(${i})" style="padding:3px 8px;font-size:10px;">✕</button></td></tr>`;
+  }).join("");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TABS
+// ─────────────────────────────────────────────────────────────────────────────
+function exportBestIdeas(){
+  const ideas=[];
+  for(const b of bonds){
+    if(!b.rc||b.rc.label!=='CHEAP')continue;
+    if(b.taxable)continue;
+    const{comps}=findComps(b);
+    if(comps.length<2)continue;
+    const avg=comps.reduce((s,c)=>s+c.yield,0)/comps.length;
+    const compDiff=Math.round((b.ytw-avg)*100);
+    if(compDiff<20)continue;
+    ideas.push({...b,compDiff,compCount:comps.length});
+  }
+  if(!ideas.length){alert('No Best Ideas to export');return;}
+  ideas.sort((a,b)=>b.compDiff-a.compDiff);
+
+  const headers=['CUSIP','Issuer','State','Size(M)','Rating','Coupon','Maturity','Call','YTW','Spread','Band R/C','Comp R/C','Comp Count','Time'];
+  const rows=ideas.map(b=>[
+    b.cusip,
+    `"${(b.issuer||'').replace(/"/g,'""')}"`,
+    b.state||'',
+    b.size!=null?(b.size>=1?b.size.toFixed(1):b.size.toFixed(2)):'',
+    b.rating||'NR',
+    b.cpn!=null?b.cpn.toFixed(3):'',
+    b.matYear||'',
+    b.callYear||'',
+    b.ytw!=null?b.ytw.toFixed(3):'',
+    b.spread!=null?(b.spread>0?'+':'')+b.spread:'',
+    b.rc?b.rc.label:'',
+    '+'+b.compDiff+' CHEAP',
+    b.compCount,
+    b.time||''
+  ].join(','));
+
+  const csv=[headers.join(','),...rows].join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='best-ideas-'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function renderBestIdeas(){
+  const container=document.getElementById('best-ideas-table');
+  const countEl=document.getElementById('best-ideas-count');
+  if(!container)return;
+
+  // Find bonds CHEAP on all 3 signals: BAND + COMP + BVAL
+  // If no BVAL curves loaded, fall back to BAND + COMP only
+  const bvalLoaded=Object.keys(bvalCurves).length>0;
+  const ideas=[];
+  for(const b of bonds){
+    if(!b.rc||b.rc.label!=='CHEAP')continue;
+    if(b.taxable)continue;
+    const{comps}=findComps(b);
+    if(comps.length<2)continue;
+    const avg=comps.reduce((s,c)=>s+c.yield,0)/comps.length;
+    const compDiff=Math.round((b.ytw-avg)*100);
+    if(compDiff<20)continue;
+    // BVAL check — only require if curves loaded AND bond has a mapped sector
+    if(bvalLoaded){
+      const bv=getBvalSignal(b);
+      if(bv&&(bv.label!=='CHEAP'||bv.diff<20))continue; // require 20+ bps cheap to BVAL
+      // if bv===null (no curve for this sector) — allow through (no signal = no disqualifier)
+    }
+    ideas.push({...b,compDiff,compCount:comps.length});
+  }
+
+  // Sort by compDiff descending (most cheap first)
+  ideas.sort((a,b)=>b.compDiff-a.compDiff);
+
+  countEl.textContent=ideas.length
+    ?`${ideas.length} bond${ideas.length!==1?'s':''} — ${bvalLoaded?'all 3 signals':'band + comps'} confirm CHEAP`
+    :`No ${bvalLoaded?'triple':'dual'}-CHEAP bonds in current list — check back after IMGR refresh or MOSB upload`;
+
+  if(!ideas.length){container.innerHTML='';return;}
+
+  const rows=ideas.map(b=>{
+    const spreadClass=b.spread>0?'spread-pos':'spread-neg';
+    return`<tr>
+      <td class="cusip">${b.cusip}</td>
+      <td class="issuer-cell" title="${b.issuer||''}">${b.issuer||'—'}</td>
+      <td style="color:#4a7fa5">${b.size!=null?(b.size>=1?b.size.toFixed(1):b.size.toFixed(2)):'—'}</td>
+      <td style="color:#38bdf8;font-weight:700">${b.rating||'NR'}</td>
+      <td style="color:#7ca5c8">${b.cpn!=null?b.cpn.toFixed(3):'—'}</td>
+      <td>${b.matYear||'—'}</td>
+      <td>${b.callYear||'—'}</td>
+      <td style="font-weight:700">${b.ytw!=null?b.ytw.toFixed(2)+'%':'—'}</td>
+      <td class="${spreadClass}">${b.spread!=null?(b.spread>0?'+':'')+b.spread:'—'}</td>
+      <td><span class="badge pill-cheap">${b.rc?b.rc.label:'—'}</span></td>
+      <td><span class="badge pill-cheap">+${b.compDiff} CHEAP</span></td>
+      <td>${(()=>{const bv=getBvalSignal(b);if(!bv)return '<span style="color:var(--text-dim)">—</span>';const sign=bv.diff>0?'+':'';return `<span class="badge pill-cheap">${sign}${bv.diff} CHEAP</span>`;})()}</td>
+      <td style="color:#4a7fa5;font-size:10px">${b.compCount} comps</td>
+      <td class="time-cell">${b.time||'—'}</td>
+    </tr>`;
+  }).join('');
+
+  container.innerHTML=`<table>
+    <thead><tr>
+      <th>CUSIP</th><th>ISSUER</th><th>SZ(M)</th><th>RTG</th><th>CPN</th>
+      <th>MAT</th><th>CALL</th><th>YTW</th><th>SPRD</th><th>BAND R/C</th><th>COMP R/C</th><th>BVAL R/C</th><th>COMPS</th><th>TIME</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function switchTab(id,el){
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
+  document.getElementById("tab-"+id).classList.add("active");
+  if(el)el.classList.add("active");
+  if(id==='bestideas')renderBestIdeas();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────────────────────
+loadRatingsLocal();
+renderMMDGrid();
+renderRatingTable();
+loadBonds();
+</script>
+</body>
+</html>
