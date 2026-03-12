@@ -353,8 +353,8 @@
       Project X auto-detects both formats.
     </p>
     <div class="drop-zone" id="comp-drop" onclick="document.getElementById('comp-file').click()" ondragover="dOver(event,'comp-drop')" ondragleave="dLeave('comp-drop')" ondrop="dDrop(event,'comp-file-cb')">
-      <div class="drop-label">📁 CLICK OR DRAG & DROP BLOOMBERG MOSB EXPORT</div>
-      <div class="drop-sub">Accepts .xlsx or .csv · auto-detects format · also accepts EMMA CSV</div>
+      <div class="drop-label">📁 CLICK OR DRAG & DROP BLOOMBERG MOSB OR TMC EXPORT</div>
+      <div class="drop-sub">Accepts .xlsx or .csv · auto-detects MOSB, TMC, or EMMA format</div>
     </div>
     <input type="file" id="comp-file" accept=".csv,.xlsx,.xls" style="display:none;" onchange="loadBulkTrades(event)">
     <div id="comp-msg" style="font-size:11px;color:#4ade80;margin-top:8px;display:none;"></div>
@@ -926,6 +926,7 @@ function parseBulkTradeCSV(csvText){
   const headerLine=lines[headerIdx];
   const headerUpper=headerLine.toUpperCase();
   const isMOSB=headerUpper.includes('SHORT NAME')&&headerUpper.includes('CUSIP')&&headerUpper.includes('YIELD');
+  const isTMC=headerUpper.includes('CUSIP')&&headerUpper.includes('CPN')&&headerUpper.includes('MATURITY')&&headerUpper.includes('YIELD')&&headerUpper.includes('PAR');
   const delim=headerLine.includes('\t')?'\t':',';
 
   const headers=headerLine.split(delim).map(h=>h.replace(/"/g,'').trim().toUpperCase());
@@ -967,6 +968,52 @@ function parseBulkTradeCSV(csvText){
         tradeDate:timeCol>=0?c[timeCol]:'',
         type:'',
         par:size?size*1000000:null
+      });
+    }
+  } else if(isTMC){
+    // TMC MSRB format: Date, Par(M), Cusip, Name, Cpn, Maturity, Attr, INS, Ratings, Call, Yield, Price, Type, Spread, Benchmark
+    const cusipCol=col('CUSIP');
+    const nameCol=col('NAME');
+    const cpnCol=col('CPN');
+    const matCol=col('MATURITY');
+    const yieldCol=col('YIELD');
+    const parCol=col('PAR');
+    const ratingsCol=col('RATINGS');
+    const callCol=col('CALL');
+    const dateCol=col('DATE');
+    const typeCol=col('TYPE');
+    if(cusipCol<0||yieldCol<0)return[];
+    for(let i=headerIdx+1;i<lines.length;i++){
+      const c=lines[i].split(delim).map(x=>x.replace(/"/g,'').trim());
+      if(!c[cusipCol]||c[cusipCol].length!==9)continue;
+      const y=parseFloat(c[yieldCol]);
+      if(isNaN(y)||y<=0||y>20)continue;
+      const matD=parseDateStr(matCol>=0?c[matCol]:'');
+      const matYear=matD?matD.getFullYear():null;
+      if(!matYear)continue;
+      const cpn=cpnCol>=0?parseFloat(c[cpnCol]):null;
+      // Par is in thousands (e.g. 665 = $665k)
+      const parRaw=parCol>=0?parseFloat(c[parCol].replace(/[$,]/g,'')):null;
+      const par=parRaw?parRaw*1000:null;
+      const size=par?par/1000000:null;
+      // Ratings — TMC uses combined format e.g. "Aa3/AA-"
+      const rating=ratingsCol>=0?c[ratingsCol]:'';
+      // Call year
+      let callYear=null;
+      if(callCol>=0&&c[callCol]){
+        const cd=parseDateStr(c[callCol]);
+        if(cd)callYear=cd.getFullYear();
+      }
+      const mmdVal=getMMD(matYear);
+      const spread=y&&mmdVal?Math.round((y-mmdVal)*100):null;
+      trades.push({
+        cusip:c[cusipCol].toUpperCase(),
+        desc:nameCol>=0?c[nameCol]:'',
+        cpn, matYear, callYear,
+        yield:y, par, size, spread,
+        rating,
+        tradeDate:dateCol>=0?c[dateCol]:'',
+        type:typeCol>=0?c[typeCol]:''
       });
     }
   } else {
@@ -1142,6 +1189,109 @@ function xlsxToText(arrayBuffer){
   return XLSX.utils.sheet_to_csv(ws,{FS:'\t',RS:'\n'});
 }
 
+// Parse TMC XLSX directly from raw cell values (avoids SheetJS CSV mangling)
+function parseTmcXlsx(arrayBuffer){
+  const wb=XLSX.read(arrayBuffer,{type:'array',cellDates:true});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,dateNF:'MM/DD/YY'});
+
+  // Find header row (contains 'Cusip' or 'CUSIP')
+  let headerIdx=-1;
+  for(let i=0;i<Math.min(5,rows.length);i++){
+    if(rows[i].some(c=>typeof c==='string'&&c.replace(/\xa0/g,'').trim().toUpperCase()==='CUSIP')){
+      headerIdx=i; break;
+    }
+  }
+  if(headerIdx<0)return[];
+
+  // Normalize headers — strip non-breaking spaces
+  const headers=rows[headerIdx].map(h=>h!=null?String(h).replace(/\xa0/g,'').trim().toUpperCase():'');
+  const col=name=>headers.findIndex(h=>h&&h.includes(name));
+
+  const cusipCol=col('CUSIP');
+  const nameCol=col('NAME');
+  const cpnCol=col('CPN');
+  const matCol=col('MATURITY');
+  const yieldCol=col('YIELD');
+  const parCol=headers.findIndex(h=>h&&h.replace(/[^A-Z]/g,'').includes('PAR'));
+  const ratingsCol=col('RATINGS');
+  const callCol=col('CALL');
+  const dateCol=col('DATE');
+  const typeCol=col('TYPE');
+
+  if(cusipCol<0||yieldCol<0)return[];
+
+  const trades=[];
+  for(let i=headerIdx+1;i<rows.length;i++){
+    const c=rows[i];
+    if(!c||!c.length)continue;
+
+    // CUSIP — may be numeric scientific notation, force to string
+    let cusip=c[cusipCol]!=null?String(c[cusipCol]).replace(/\xa0/g,'').trim():'';
+    // If it looks like scientific notation, skip (corrupted)
+    if(/e\+/i.test(cusip))continue;
+    if(cusip.length!==9)continue;
+
+    const y=parseFloat(c[yieldCol]);
+    if(isNaN(y)||y<=0||y>20)continue;
+
+    // Maturity — SheetJS with raw:false gives MM/DD/YY string
+    let matYear=null;
+    const matRaw=c[matCol]!=null?String(c[matCol]).trim():'';
+    if(matRaw){
+      // MM/DD/YY format — need to fix 2-digit year
+      const mDate=parseDateStr(matRaw);
+      if(mDate){
+        matYear=mDate.getFullYear();
+        // Fix 2-digit year: if year < 2020 assume +100 (e.g. 1944 -> 2044)
+        if(matYear<2020)matYear+=100;
+      }
+    }
+    if(!matYear)continue;
+
+    const cpn=cpnCol>=0&&c[cpnCol]!=null?parseFloat(c[cpnCol]):null;
+
+    // Par in thousands
+    const parRaw=parCol>=0&&c[parCol]!=null?String(c[parCol]).replace(/[$,\xa0\s]/g,''):'';
+    const parK=parRaw?parseFloat(parRaw):null;
+    const par=parK?parK*1000:null;
+    const size=par?par/1000000:null;
+
+    const rating=ratingsCol>=0&&c[ratingsCol]?String(c[ratingsCol]).trim():'';
+
+    // Call — parse "C29" style (year suffix) or full date
+    let callYear=null;
+    if(callCol>=0&&c[callCol]){
+      const callRaw=String(c[callCol]).trim();
+      // "C29" = callable 2029, "C35" = 2035 etc
+      const cShort=callRaw.match(/^C(\d{2})$/i);
+      if(cShort){
+        callYear=2000+parseInt(cShort[1]);
+      } else {
+        const cd=parseDateStr(callRaw);
+        if(cd){
+          callYear=cd.getFullYear();
+          if(callYear<2020)callYear+=100;
+        }
+      }
+    }
+
+    const mmdVal=getMMD(matYear);
+    const spread=y&&mmdVal?Math.round((y-mmdVal)*100):null;
+
+    trades.push({
+      cusip:cusip.toUpperCase(),
+      desc:nameCol>=0&&c[nameCol]?String(c[nameCol]).trim():'',
+      cpn, matYear, callYear,
+      yield:y, par, size, spread,
+      rating,
+      tradeDate:dateCol>=0&&c[dateCol]?String(c[dateCol]).trim():'',
+      type:typeCol>=0&&c[typeCol]?String(c[typeCol]).trim():''
+    });
+  }
+  return trades;
+}
+
 function processEmmaCusipFiles(files){
   if(!files.length)return;
   let ok=0,fail=0;
@@ -1168,13 +1318,31 @@ function processCompFile(file){
   const isXlsx=/\.(xlsx|xls)$/i.test(file.name);
   const r=new FileReader();
   r.onload=e=>{
-    let text;
+    let trades=[];
     if(isXlsx){
-      text=xlsxToText(e.target.result);
+      try{
+        trades=parseTmcXlsx(e.target.result);
+      }catch(err){
+        const m=document.getElementById('comp-msg');
+        m.style.display='block'; m.style.color='#f87171';
+        m.textContent='⚠ TMC parse error: '+err.message;
+        return;
+      }
+      // If TMC parser got nothing, fall back to generic XLSX->CSV->parse
+      if(!trades.length){
+        try{
+          const text=xlsxToText(e.target.result);
+          trades=parseBulkTradeCSV(text);
+        }catch(err2){
+          const m=document.getElementById('comp-msg');
+          m.style.display='block'; m.style.color='#f87171';
+          m.textContent='⚠ Parse error: '+err2.message;
+          return;
+        }
+      }
     } else {
-      text=e.target.result;
+      trades=parseBulkTradeCSV(e.target.result);
     }
-    const trades=parseBulkTradeCSV(text);
     if(!trades.length){
       const m=document.getElementById('comp-msg');
       m.style.display='block'; m.style.color='#f87171';
