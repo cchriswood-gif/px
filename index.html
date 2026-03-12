@@ -2682,7 +2682,7 @@ function buildBondRecord(b,time){
   const mmdVal=mmdCalc;
   const tsyVal=interpolateTsy(b.matYear);
   const ytw=b.ytw!=null?b.ytw:(b.spread!=null&&mmdCalc!=null?+(mmdCalc+b.spread/100).toFixed(3):null);
-  const spread=b.spread!=null?b.spread:(ytw!=null&&mmdCalc!=null?Math.round((ytw-mmdCalc)*100):null);
+  const spread=ytw!=null&&mmdCalc!=null?Math.round((ytw-mmdCalc)*100):(b.spread!=null?b.spread:null);
   const ratio=ytw!=null&&tsyVal?Math.round((ytw/tsyVal)*100):null;
   const rating=getInsuredRating(b.issuer,b.notes)||b.rating||lookupRating(b.issuer);
   const rc=b.taxable?{label:'TAX',cls:'badge-tax'}:(spread!=null?richOrCheap(spread,rating,b.issuer,b.cusip,b.taxable):null);
