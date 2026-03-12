@@ -305,7 +305,7 @@
             <th onclick="sortBy('time')">TIME</th>
             <th onclick="sortBy('cusip')">CUSIP</th>
             <th onclick="sortBy('issuer')">ISSUER</th>
-            <th onclick="sortBy('size')">SZ(M)</th>
+            <th onclick="sortBy('size')">SZ</th>
             <th onclick="sortBy('rating')">RTG</th>
             <th onclick="sortBy('cpn')">CPN</th>
             <th onclick="sortBy('matYear')">MAT</th>
@@ -2226,7 +2226,49 @@ function parseSzIssuerCusipRun(text,dbg){
     const rating=insRating||(moody||fitch||sp||null);
     seen.add(cusip);
     dbg.push(`✓ SZIC ${cusip} ${issuer.slice(0,20)} mat=${matYear} ytw=${ytw} ${rating||'NR'}${insRating?' [INS]':''}`);
-    result.push({cusip,issuer,cpn,matYear,callYear,ytw,size:sz,moody,sp,fitch,rating});
+    result.push({cusip,issuer,cpn,matYear,callYear,ytw,size:sz/1000,moody,sp,fitch,rating});
+  }
+  return result;
+}
+
+// Format: Security + A Sz (M) header — CUSIP(9) + size(int) + issuer + cpn + mat + [call] + ytc + notes
+// e.g. "91412HXU24000UNIV OF CALIFORNIA CA REVENUES5.00011/15/362.810UCAL"
+function isCusipSzIssuerNoStateRun(text){
+  if(!/Security.*Sz.*Issuer.*Cpn.*YTC/i.test(text))return false;
+  // Data lines may be spaced or unspaced after cleaning
+  const firstData=text.split('\n').filter(l=>/^[A-Z0-9]{9}[\s\d]/.test(l.trim())&&l.length>20)[0]||'';
+  return /^[A-Z0-9]{9}[\s\d]/.test(firstData);
+}
+function parseCusipSzIssuerNoStateRun(text,dbg){
+  const result=[],seen=new Set();
+  const lines=text.split('\n').map(l=>l.trim()).filter(l=>/^[A-Z0-9]{9}[\s\d]/.test(l)&&l.length>20);
+  dbg.push('CusipSzNoState lines: '+lines.length);
+  // Handle both spaced ("91412HXU2 4000 UNIV...") and unspaced ("91412HXU24000UNIV...")
+  const pat=/^([A-Z0-9]{9})\s*(\d+)\s*([A-Z][A-Z0-9 &\/\-\.,\']+?)\s*(\d+\.\d{3})\s*(\d{2}\/\d{2}\/\d{2})\s*(?:(\d{2}\/\d{2}\/\d{2})\s*)?(\d+\.\d{3})/;
+  const parseY=d=>{const y=parseInt(d.slice(6));return y<80?2000+y:1900+y;};
+  for(const line of lines){
+    const m=line.match(pat);
+    if(!m){dbg.push('SKIP nostate: '+line.slice(0,50));continue;}
+    const cusip=m[1];
+    if(seen.has(cusip))continue;
+    const sz=parseInt(m[2]);
+    const issuer=m[3].trim().slice(0,50);
+    const cpn=parseFloat(m[4]);
+    const matYear=parseY(m[5]);
+    const callYear=m[6]?parseY(m[6]):null;
+    const ytw=parseFloat(m[7]);
+    if(!matYear||matYear<2025||matYear>2075)continue;
+    if(!ytw||ytw<1||ytw>15)continue;
+    const effectiveCallYear=(callYear&&callYear<matYear)?callYear:null;
+    // Extract rating from notes (e.g. "Aa2/AA+" or "Aaa/AAA")
+    const rtgM=line.slice(m[0].length).match(/\b(Aaa|Aa[123]|A[123]?|Baa[123])\b/);
+    const spM=line.slice(m[0].length).match(/\b(AAA|AA[+-]?|A[+-]?)\b/);
+    const moody=rtgM?rtgM[1]:null;
+    const sp=spM?spM[1]:null;
+    const rating=moody||sp||null;
+    seen.add(cusip);
+    dbg.push(`✓ CSNS ${cusip} ${issuer.slice(0,20)} mat=${matYear} call=${effectiveCallYear||'NC'} ytw=${ytw} ${rating||'NR'}`);
+    result.push({cusip,issuer,cpn,matYear,callYear:effectiveCallYear,ytw,size:sz/1000,moody,sp,rating});
   }
   return result;
 }
@@ -2563,6 +2605,9 @@ function parseBloombergBonds(rawText){
   if(isConcatRunTable(text)){
     dbg.push("MODE: Concatenated Run Table");
     result=parseConcatRun(text,dbg);
+  } else if(isCusipSzIssuerNoStateRun(text)){
+    dbg.push("MODE: CUSIP-Sz-Issuer-NoState Run");
+    result=parseCusipSzIssuerNoStateRun(text,dbg);
   } else if(isCusipSzIssuerStRun(text)){
     dbg.push("MODE: CUSIP-Sz-Issuer-St Run");
     result=parseCusipSzIssuerStRun(text,dbg);
@@ -2869,7 +2914,7 @@ function renderTable(){
       <td class="time-cell">${b.time||"—"}</td>
       <td class="cusip">${b.cusip}</td>
       <td class="issuer-cell" title="${b.issuer||''}">${b.issuer||"—"}</td>
-      <td style="color:#4a7fa5;text-align:right">${b.size!=null?(b.size>=1?b.size.toFixed(1):b.size.toFixed(2)):"—"}</td>
+      <td style="color:#4a7fa5;text-align:right">${b.size!=null?Math.round(b.size*1000).toLocaleString():"—"}</td>
       <td>${ratingDisplay}</td>
       <td style="color:#7ca5c8">${b.cpn!=null?b.cpn.toFixed(3):"—"}</td>
       <td>${b.matYear||"—"}</td>
@@ -3261,18 +3306,19 @@ function exportBestIdeas(){
     if(comps.length<2)continue;
     const avg=comps.reduce((s,c)=>s+c.yield,0)/comps.length;
     const compDiff=Math.round((b.ytw-avg)*100);
-    if(compDiff<20)continue;
+    const compThreshold=b.cpn!=null&&b.cpn<4?30:20;
+    if(compDiff<compThreshold)continue;
     ideas.push({...b,compDiff,compCount:comps.length});
   }
   if(!ideas.length){alert('No Best Ideas to export');return;}
   ideas.sort((a,b)=>b.compDiff-a.compDiff);
 
-  const headers=['CUSIP','Issuer','State','Size(M)','Rating','Coupon','Maturity','Call','YTW','Spread','Band R/C','Comp R/C','Comp Count','Time'];
+  const headers=['CUSIP','Issuer','State','Size','Rating','Coupon','Maturity','Call','YTW','Spread','Band R/C','Comp R/C','Comp Count','Time'];
   const rows=ideas.map(b=>[
     b.cusip,
     `"${(b.issuer||'').replace(/"/g,'""')}"`,
     b.state||'',
-    b.size!=null?(b.size>=1?b.size.toFixed(1)+'M':Math.round(b.size*1000)+'k'):'',
+    b.size!=null?Math.round(b.size*1000):'',
     b.rating||'NR',
     b.cpn!=null?b.cpn.toFixed(3):'',
     b.matYear||'',
@@ -3311,7 +3357,8 @@ function renderBestIdeas(){
     if(comps.length<2)continue;
     const avg=comps.reduce((s,c)=>s+c.yield,0)/comps.length;
     const compDiff=Math.round((b.ytw-avg)*100);
-    if(compDiff<20)continue;
+    const compThreshold=b.cpn!=null&&b.cpn<4?30:20;
+    if(compDiff<compThreshold)continue;
     // BVAL check — only require if curves loaded AND bond has a mapped sector
     if(bvalLoaded){
       const bv=getBvalSignal(b);
@@ -3335,7 +3382,7 @@ function renderBestIdeas(){
     return`<tr>
       <td class="cusip">${b.cusip}</td>
       <td class="issuer-cell" title="${b.issuer||''}">${b.issuer||'—'}</td>
-      <td style="color:#4a7fa5">${b.size!=null?(b.size>=1?b.size.toFixed(1)+'M':Math.round(b.size*1000)+'k'):'—'}</td>
+      <td style="color:#4a7fa5">${b.size!=null?Math.round(b.size*1000).toLocaleString():'—'}</td>
       <td style="color:#38bdf8;font-weight:700">${b.rating||'NR'}</td>
       <td style="color:#7ca5c8">${b.cpn!=null?b.cpn.toFixed(3):'—'}</td>
       <td>${b.matYear||'—'}</td>
@@ -3352,7 +3399,7 @@ function renderBestIdeas(){
 
   container.innerHTML=`<table>
     <thead><tr>
-      <th>CUSIP</th><th>ISSUER</th><th>SZ(M)</th><th>RTG</th><th>CPN</th>
+      <th>CUSIP</th><th>ISSUER</th><th>SZ</th><th>RTG</th><th>CPN</th>
       <th>MAT</th><th>CALL</th><th>YTW</th><th>SPRD</th><th>BAND R/C</th><th>COMP R/C</th><th>BVAL R/C</th><th>COMPS</th><th>TIME</th>
     </tr></thead>
     <tbody>${rows}</tbody>
