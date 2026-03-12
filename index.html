@@ -643,10 +643,11 @@ function getFairBand(r,issuer,cusip,taxable,amt){
   // Handle combined ratings like "Aa1/AA+" — resolve to best single rating
   let resolvedR=r;
   if(r.includes('/')){
-    const parts=r.split('/');
-    const ri=x=>{const i=_RR.indexOf(x);return i===-1?99:i;};
+    const parts=r.split('/').map(p=>p.trim());
+    const ri=x=>{const i=_RR.indexOf(x.trim());return i===-1?99:i;};
     resolvedR=parts.reduce((a,b)=>ri(a)<=ri(b)?a:b);
   }
+  resolvedR=resolvedR.trim();
   const base=RATING_BANDS[resolvedR];
   if(!base)return null;
   const sector=detectSector(issuer,cusip,taxable||false,amt||false);
@@ -1053,7 +1054,7 @@ function parseBulkTradeCSV(csvText){
 // Find comps: maturity ±3 years + yield within ±0.40%, exclude same CUSIP
 function ratingTier(r){
   if(!r)return 'NR';
-  const rr=r.includes('/')?r.split('/')[0]:r;
+  const rr=r.includes('/')?r.split('/')[0].trim():r.trim();
   if(/Aaa|AAA/.test(rr))return'Aaa';
   if(/Aa[123]|AA[+-]?/.test(rr))return'Aa';
   if(/A[123]|A[+-]?/.test(rr))return'A';
@@ -2282,6 +2283,42 @@ function parseCusipSzIssuerNoStateRun(text,dbg){
   return result;
 }
 
+// Format: CUSIP + size + issuer + state + cpn + mat + yield + ytm + px + [call] + moody + sp
+// e.g. "13752ABG4105CANEY CREEK TX MUNI UTILITY DITX5.00003/01/353.6503.650110.171N.A.BBB+"
+// Header: Security ASz(M) Issuer St Cpn Mty A Yield A YTM A Px Nxt Call Moody S&P
+function isCusipSzIssuerStYtmRun(text){
+  return /Security.*Sz.*Issuer.*St.*Cpn.*Mty.*Yield.*YTM/i.test(text);
+}
+function parseCusipSzIssuerStYtmRun(text,dbg){
+  const STATES='AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC|PR';
+  const MOODY='N\\.A\\.|Aaa|Aa[123]|A[123]|Baa[123]';
+  const SP='N\\.A\\.|AAA|AA\\+|AA-|AA|A\\+|A-|BBB\\+|BBB-|BBB';
+  const body=text.replace(/^Security.*$/im,'').replace(/\n/g,' ').replace(/\s+/g,' ').trim();
+  const pat=new RegExp(
+    '([A-Z0-9]{9})\\s+(\\d+)\\s+([A-Z][A-Z0-9 &\\/\\-\\.]+?)\\s+('+STATES+')\\s+(\\d+\\.\\d{3})\\s+(\\d{2}\\/\\d{2}\\/\\d{2})\\s+(\\d+\\.\\d{3})\\s+(\\d+\\.\\d{3})\\s+(\\d+\\.\\d{3})\\s+(?:(\\d{2}\\/\\d{2}\\/\\d{2})\\s+)?('+MOODY+')\\s+('+SP+')','g');
+  const result=[],seen=new Set();
+  const parseY=d=>{const y=parseInt(d.slice(6));return y<80?2000+y:1900+y;};
+  for(const m of [...body.matchAll(pat)]){
+    const cusip=m[1];
+    if(seen.has(cusip))continue;
+    const matYear=parseY(m[6]);
+    if(!matYear||matYear<2025||matYear>2075)continue;
+    const callRaw=m[10];
+    const callYearRaw=callRaw?parseY(callRaw):null;
+    const callYear=(callYearRaw&&callYearRaw<matYear)?callYearRaw:null;
+    const ytw=parseFloat(m[7]);
+    if(!ytw||ytw<1||ytw>15)continue;
+    const moody=m[11]==='N.A.'?null:m[11];
+    const sp=m[12]==='N.A.'?null:m[12];
+    const rating=pickRating(moody,sp);
+    const issuer=m[3].trim().slice(0,50);
+    seen.add(cusip);
+    dbg.push(`✓ CSYT ${cusip} ${issuer.slice(0,20)} st=${m[4]} mat=${matYear} call=${callYear||'NC'} ytw=${ytw} ${rating||'NR'}`);
+    result.push({cusip,issuer,state:m[4],cpn:parseFloat(m[5]),matYear,callYear,ytw,size:parseInt(m[2])/1000,moody,sp,rating});
+  }
+  return result;
+}
+
 function isCusipSzIssuerStRun(text){
   const firstLine=text.split('\n').filter(l=>l.trim().length>20&&/^[A-Z0-9]{9}[\s\d]/.test(l.trim()))[0]||'';
   if(/^[A-Z0-9]{9}\d+[A-Z].*[A-Z]{2}\d+\.\d{3}\d{2}\/\d{2}\/\d{2}/.test(firstLine))return true;
@@ -2617,6 +2654,9 @@ function parseBloombergBonds(rawText){
   } else if(isCusipSzIssuerNoStateRun(text)){
     dbg.push("MODE: CUSIP-Sz-Issuer-NoState Run");
     result=parseCusipSzIssuerNoStateRun(text,dbg);
+  } else if(isCusipSzIssuerStYtmRun(text)){
+    dbg.push("MODE: CUSIP-Sz-Issuer-St-YTM Run");
+    result=parseCusipSzIssuerStYtmRun(text,dbg);
   } else if(isCusipSzIssuerStRun(text)){
     dbg.push("MODE: CUSIP-Sz-Issuer-St Run");
     result=parseCusipSzIssuerStRun(text,dbg);
