@@ -1752,16 +1752,23 @@ function parseObligorRun(text, dbg){
   const MOODY='N\\.A\\.|Aaa|Aa[123]|A[123]|Baa[123]';
   const SP='N\\.A\\.|AAA|AA\\+|AA-|AA|A\\+|A-|A(?!a)';
   const body=text.replace(/^Security\s+St\s+Issuer.*$/im,'');
-  // Split on SP-rating-end + next CUSIP+state (concat input)
-  const withNL=body.replace(/(AA\+|AA-|AA(?![+-A-Z])|A\+|A-|(?<![A-Z])A(?![A-Za-z])|N\.A\.)([A-Z0-9]{9}[A-Z]{2})/g,'$1\n$2');
-  const lines=withNL.split('\n').map(l=>l.trim()).filter(l=>/^[A-Z0-9]{9}/.test(l));
+  // If already spaced (cleaner added spaces), use lines directly; otherwise split on rating boundaries
+  const isSpacedInput=/^[A-Z0-9]{9}\s+[A-Z]{2}\s+/.test(body.trim());
+  let lines;
+  if(isSpacedInput){
+    lines=body.split('\n').map(l=>l.trim()).filter(l=>/^[A-Z0-9]{9}/.test(l));
+  } else {
+    const withNL=body.replace(/(AA\+|AA-|AA(?![+-A-Z])|A\+|A-|(?<![A-Z])A(?![A-Za-z])|N\.A\.)([A-Z0-9]{9}[A-Z]{2})/g,'$1\n$2');
+    lines=withNL.split('\n').map(l=>l.trim()).filter(l=>/^[A-Z0-9]{9}/.test(l));
+  }
   dbg.push('OBLIGOR lines: '+lines.length);
+  if(lines.length>0)dbg.push('FIRST LINE: '+lines[0].slice(0,150));
   // Handle both spaced (already split by cleaner) and run-together formats
   const reSpaced=new RegExp(
-    '^([A-Z0-9]{9})\\s+([A-Z]{2})\\s+([A-Z][A-Z0-9 &\\/\\-\\.]+?)\\s+(\\d+\\.\\d{3})\\s+(\\d{2}\\/\\d{2}\\/\\d{2})\\s+(\\d{2}\\/\\d{2}\\/\\d{2})\\s+(\\d+\\.\\d{3})\\s+[\\d.]+\\s+([\\d,]+)\\s+(-?\\d+)\\s+[A-Za-z &\\.]+?\\s+('+MOODY+')\\s+('+SP+')\\s*$'
+    '^([A-Z0-9]{9})\\s+([A-Z]{2})\\s+([A-Z][A-Z0-9 &\\/\\-\\.]+?)\\s+(\\d+\\.\\d{3})\\s+(\\d{2}\\/\\d{2}\\/\\d{2})\\s+(\\d{2}\\/\\d{2}\\/\\d{2})\\s+([\\d,]+)\\s+(\\d+\\.\\d{2,3})\\s+[+]?(-?\\d+)\\s+('+MOODY+')\\s+('+SP+')'
   );
   const reConcat=new RegExp(
-    '^([A-Z0-9]{9})([A-Z]{2})([A-Z][A-Z0-9 &\\/\\-\\.]+?)(\\d+\\.\\d{3})(\\d{2}\\/\\d{2}\\/\\d{2})(\\d{2}\\/\\d{2}\\/\\d{2})(\\d+\\.\\d{3})(\\d+\\.\\d{3})([\\d,]+)(-?\\d+)[A-Za-z &\\.]+('+MOODY+')('+SP+')'
+    '^([A-Z0-9]{9})(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC|PR)([A-Z][A-Z0-9 &\\/\\-\\.]+?)(\\d+\\.\\d{3})(\\d{2}\\/\\d{2}\\/\\d{2})(\\d{2}\\/\\d{2}\\/\\d{2})([\\d,]+)(\\d+\\.\\d{2})[+]?(-?\\d+)('+MOODY+')('+SP+')'
   );
   const result=[],seen=new Set();
   for(const line of lines){
@@ -1772,17 +1779,19 @@ function parseObligorRun(text, dbg){
     const cusip=m[1].toUpperCase();
     if(seen.has(cusip))continue;
     const matYear=parseMatYear(m[5]);
+    const callYearRaw=parseMatYear(m[6]);
+    const callYear=(callYearRaw&&callYearRaw<matYear)?callYearRaw:null;
     if(!matYear||matYear<2025||matYear>2075)continue;
-    const moodyIdx=spaced?10:11, spIdx=spaced?11:12;
+    const moodyIdx=spaced?10:10, spIdx=spaced?11:11;
     const moody=m[moodyIdx]==='N.A.'?null:m[moodyIdx];
     const sp=m[spIdx]==='N.A.'?null:m[spIdx];
     const rating=pickRating(moody,sp);
     const issuer=m[3].trim().slice(0,50);
-    const ytw=parseFloat(m[7]);
-    const spread=parseInt(spaced?m[9]:m[10]);
+    const ytw=spaced?parseFloat(m[8]):parseFloat(m[8]);
+    const spread=parseInt(spaced?m[9]:m[9]);
     dbg.push('✓ OBLIGOR '+cusip+' "'+issuer+'" mdy='+moody+' sp='+sp+' mat='+matYear+' ytw='+ytw+' spd='+spread);
     seen.add(cusip);
-    result.push({cusip,issuer,state:m[2],size:parseFloat((spaced?m[8]:m[9]).replace(',','')),cpn:parseFloat(m[4]),matYear,ytw,spread,moody,sp,rating});
+    result.push({cusip,issuer,state:m[2],size:parseFloat(m[7].replace(/,/g,''))/1000,cpn:parseFloat(m[4]),matYear,callYear:callYear,ytw,spread,moody,sp,rating});
   }
   return result;
 }
