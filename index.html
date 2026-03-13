@@ -601,7 +601,7 @@ function sectorFromIndustry(code, amt){
     case 'APT': return amt?'airportAMT':'airportNonAMT';
     case 'MED': return 'hospital';
     case 'HGR': return 'univ';
-    case 'EDU': return 'univ';
+    case 'EDU': return 'go';
     case 'SCD': return 'go';
     case 'WTR': return 'water';
     case 'GOB': return 'go';
@@ -655,7 +655,7 @@ function detectSector(issuer,cusip,taxable,amt){
   if(/DASNY|DORMITORY AUTH|DORM AUTH/.test(u))return'univ';
   if(/MARICOPA ECD|ECON DEV AUTH|INDL DEV|IDA\b|\bEDA\b/.test(u))return'salesTax';
   if(/DAVIDSON|NASHVILLE|\bCITY\b.*\bCO\b|\bMETRO\b.*GO/.test(u))return'go';
-  if(/WASHINGTON ST|NEVADA ST|OREGON ST|COLORADO ST|MINNESOTA ST|MICHIGAN ST|OHIO ST|PENNSYLVANIA ST|CONNECTICUT ST|NEW YORK ST|NEW JERSEY ST|CALIFORNIA ST|FLORIDA ST|TEXAS ST|ILLINOIS ST|GEORGIA ST|VIRGINIA ST|MARYLAND ST|NORTH CAROLINA ST|SOUTH CAROLINA ST|TENNESSEE ST|KENTUCKY ST|INDIANA ST|WISCONSIN ST|MISSOURI ST|ARIZONA ST|UTAH ST|IOWA ST|KANSAS ST|ARKANSAS ST|MISSISSIPPI ST|LOUISIANA ST|OKLAHOMA ST|ALABAMA ST|NEBRASKA ST|WEST VIRGINIA ST|IDAHO ST|NEW MEXICO ST|HAWAII ST|MAINE ST|RHODE ISLAND ST|DELAWARE ST|VERMONT ST|NEW HAMPSHIRE ST|MONTANA ST|WYOMING ST|SOUTH DAKOTA ST|NORTH DAKOTA ST|ALASKA ST/.test(u))return'go';
+  if(/WASHINGTON ST|NEVADA ST|OREGON ST|COLORADO ST|MINNESOTA ST|MICHIGAN ST|OHIO ST|PENNSYLVANIA ST|CONNECTICUT ST|NEW YORK ST|NEW JERSEY ST|CALIFORNIA ST|FLORIDA ST|TEXAS ST|ILLINOIS ST|GEORGIA ST|VIRGINIA ST|MARYLAND ST|NORTH CAROLINA ST|SOUTH CAROLINA ST|TENNESSEE ST|KENTUCKY ST|INDIANA ST|WISCONSIN ST|MISSOURI ST|ARIZONA ST|UTAH ST|IOWA ST|KANSAS ST|ARKANSAS ST|MISSISSIPPI ST|LOUISIANA ST|OKLAHOMA ST|ALABAMA ST|NEBRASKA ST|WEST VIRGINIA ST|IDAHO ST|NEW MEXICO ST|HAWAII ST|MAINE ST|RHODE ISLAND ST|DELAWARE ST|VERMONT ST|NEW HAMPSHIRE ST|MONTANA ST|WYOMING ST|SOUTH DAKOTA ST|NORTH DAKOTA ST|ALASKA ST|MASSACHUSETTS ST|MA ST\b/.test(u))return'go';
   if(/\bST\b$/.test(u.trim()))return'go'; // catches 'CONNECTICUT ST' etc
   if(/\bST\b.*\bREF\b|ST.*UNIV|\bSTATE\b/.test(u)&&!/TRANSIT|TRANSPORT|HOUSING|HOSPITAL/.test(u))return'go';
   if(/\bNEW YORK\b/.test(u)&&!/CITY|NYC|MUNI|TRANS|WATER/.test(u))return'go';
@@ -698,6 +698,25 @@ function lookupRating(issuer){
   const up=issuer.toUpperCase();
   for(const r of issuerRatings){if(up.includes(r.keyword.toUpperCase()))return r.rating;}
   return null;
+}
+
+// CUSIP ratings cache — persists across loads, built from all bonds seen
+const cusipRatingCache={};
+function cacheRating(cusip,rating){
+  if(!cusip||!rating||rating==='NR')return;
+  if(/^(Aaa|Aa[123]|A[123]?|Baa[123]|AAA|AA[+-]?|A[+-]?|BBB[+-]?)$/.test(rating.split('/')[0].trim())){
+    cusipRatingCache[cusip]=rating;
+    try{localStorage.setItem('px-cusip-ratings',JSON.stringify(cusipRatingCache));}catch(e){}
+  }
+}
+function getCachedRating(cusip){
+  return cusip?cusipRatingCache[cusip]||null:null;
+}
+function loadCusipRatingCache(){
+  try{
+    const saved=localStorage.getItem('px-cusip-ratings');
+    if(saved){const d=JSON.parse(saved);Object.assign(cusipRatingCache,d);console.log(`Rating cache loaded: ${Object.keys(cusipRatingCache).length} CUSIPs`);}
+  }catch(e){}
 }
 // ─────────────────────────────────────────────────────────────────────────────
 // BVAL SECTOR CURVES
@@ -2873,7 +2892,7 @@ function buildBondRecord(b,time){
   const ytw=b.ytw!=null?b.ytw:(b.spread!=null&&mmdCalc!=null?+(mmdCalc+b.spread/100).toFixed(3):null);
   const spread=ytw!=null&&mmdCalc!=null?Math.round((ytw-mmdCalc)*100):(b.spread!=null?b.spread:null);
   const ratio=ytw!=null&&tsyVal?Math.round((ytw/tsyVal)*100):null;
-  const rating=getInsuredRating(b.issuer,b.notes)||b.rating||lookupRating(b.issuer);
+  const rating=getInsuredRating(b.issuer,b.notes)||b.rating||b.moody||b.sp||getCachedRating(b.cusip)||lookupRating(b.issuer);
   const rc=b.taxable?{label:'TAX',cls:'badge-tax'}:(spread!=null?richOrCheap(spread,rating,b.issuer,b.cusip,b.taxable):null);
   const sector=sectorFromIndustry(b.industry,b.amt)||detectSector(b.issuer,b.cusip,b.taxable,b.amt);
   const sectorLabel=sector?sector.replace('airportAMT','Airport AMT').replace('airportNonAMT','Airport').replace('gasPrepay','Gas Prepay').replace('hospital','Hospital').replace('housing','Housing').replace('water','Water').replace('univ','Higher Ed').replace('toll','Transport').replace('cops','COPs').replace('salesTax','Sales Tax').replace('go','GO'):null;
@@ -2888,6 +2907,12 @@ function addBonds(parsed){
   newCusips.clear(); updatedCusips.clear();
   let added=0,dupes=0,updated=0;
   const time=nowTime();
+  // Populate CUSIP rating cache from incoming bonds
+  for(const b of parsed){
+    if(b.cusip&&b.rating)cacheRating(b.cusip,b.rating);
+    if(b.cusip&&b.moody)cacheRating(b.cusip,b.moody);
+    if(b.cusip&&b.sp)cacheRating(b.cusip,b.sp);
+  }
   for(const b of parsed){
     const existIdx=bonds.findIndex(x=>x.cusip===b.cusip);
     if(existIdx===-1){
@@ -3139,8 +3164,9 @@ function renderTable(){
           if(!hasSector) return '<span style="color:var(--text-dim)">—</span>'; // no sector, silent
           // Show debug info on hover
           const sKey=b.sectorKey||b.sector||'?';
-          const rtg=b.rating||'?';
+          const rtg=b.rating||'NR';
           const r=rtg.split('/')[0];
+          if(r==='NR'||!r) return '<span style="color:var(--text-dim)">—</span>'; // NR = no curve exists
           return `<span style="color:#f59e0b;font-size:10px;cursor:help;" title="No BVAL: sector=${sKey} rating=${r}">?</span>`;
         }
         const lbl=bv.label.toUpperCase();
@@ -3245,6 +3271,7 @@ function updateStats(){
     <div class="stat"><span class="stat-val">${avg>0?"+":""}${avg}</span><span class="stat-lbl">AVG SPRD</span></div>
     <div class="stat"><span class="stat-val" style="color:#a78bfa">${Object.keys(emmaHistory).length}</span><span class="stat-lbl">EMMA</span></div>
     <div class="stat"><span class="stat-val" style="color:#f59e0b">${bulkTrades.length?bulkTrades.length.toLocaleString():'0'}</span><span class="stat-lbl">COMPS DB</span></div>
+    <div class="stat"><span class="stat-val" style="color:#a78bfa">${Object.keys(cusipRatingCache).length.toLocaleString()}</span><span class="stat-lbl">RTG CACHE</span></div>
   `;
   document.getElementById("stats-section").style.display="block";
 }
@@ -3267,7 +3294,7 @@ function loadBonds(){
       const mmdCalc=getMMD(b.matYear); // always spread to maturity
       const mmdVal=mmdCalc;
       const spread=b.spread!=null?b.spread:(b.ytw!=null&&mmdCalc!=null?Math.round((b.ytw-mmdCalc)*100):null);
-      const rating=getInsuredRating(b.issuer,b.notes)||b.rating||lookupRating(b.issuer);
+      const rating=getInsuredRating(b.issuer,b.notes)||b.rating||b.moody||b.sp||getCachedRating(b.cusip)||lookupRating(b.issuer);
       const rc=b.taxable?{label:'TAX',cls:'badge-tax'}:(spread!=null?richOrCheap(spread,rating,b.issuer,b.cusip,b.taxable):null);
       return{...b,mmdVal,spread,rating,rc,rcLabel:rc?rc.label:''};
     });
@@ -3277,7 +3304,7 @@ function loadBonds(){
 function recalcAll(){
   if(!bonds.length)return;
   bonds=bonds.map(b=>{
-    const rating=b.rating||lookupRating(b.issuer)||null;
+    const rating=b.rating||getCachedRating(b.cusip)||lookupRating(b.issuer)||null;
     const mmdCalc=getMMD(b.matYear);
     const mmdVal=mmdCalc;
     const tsyVal=interpolateTsy(b.matYear);
@@ -3461,7 +3488,7 @@ function importRatings(e){
       issuerRatings=Array.from(existing.values());
       saveRatingsLocal();
       renderRatingTable();
-      if(bonds.length){bonds=bonds.map(b=>{const rating=b.rating||lookupRating(b.issuer);const rc=b.taxable?{label:'TAX',cls:'badge-tax'}:(b.spread!=null?richOrCheap(b.spread,rating,b.issuer,b.cusip,b.taxable):null);return{...b,rating,rc,rcLabel:rc?rc.label:''};});renderTable();updateStats();}
+      if(bonds.length){bonds=bonds.map(b=>{const rating=b.rating||getCachedRating(b.cusip)||lookupRating(b.issuer);const rc=b.taxable?{label:'TAX',cls:'badge-tax'}:(b.spread!=null?richOrCheap(b.spread,rating,b.issuer,b.cusip,b.taxable):null);return{...b,rating,rc,rcLabel:rc?rc.label:''};});renderTable();updateStats();}
       const msg=document.getElementById('ratings-save-msg');
       if(msg){msg.textContent=`✓ ${data.length} ratings imported`;msg.style.display='inline';setTimeout(()=>{msg.style.display='none';msg.textContent='✓ Saved';},3000);}
     }catch(err){alert('Could not read ratings file. Make sure it\'s a valid Project X ratings export.');}
@@ -3510,7 +3537,7 @@ function exportBestIdeas(){
     ideas.push({...b,compDiff,compCount:comps.length});
   }
   if(!ideas.length){alert('No Best Ideas to export');return;}
-  ideas.sort((a,b)=>b.compDiff-a.compDiff);
+  ideas.sort((a,b)=>a.matYear-b.matYear);
 
   const headers=['CUSIP','Issuer','State','Size','Rating','Coupon','Maturity','Call','YTW','Spread','Band R/C','Comp R/C','Comp Count','Time'];
   const rows=ideas.map(b=>[
@@ -3561,14 +3588,14 @@ function renderBestIdeas(){
     // BVAL check — only require if curves loaded AND bond has a mapped sector
     if(bvalLoaded){
       const bv=getBvalSignal(b);
-      if(bv&&(bv.label!=='CHEAP'||bv.diff<8))continue; // require 8+ bps cheap to BVAL
+      if(bv&&(bv.label!=='CHEAP'||bv.diff<1))continue; // require label=CHEAP to BVAL
       // if bv===null (no curve for this sector) — allow through (no signal = no disqualifier)
     }
     ideas.push({...b,compDiff,compCount:comps.length});
   }
 
   // Sort by compDiff descending (most cheap first)
-  ideas.sort((a,b)=>b.compDiff-a.compDiff);
+  ideas.sort((a,b)=>a.matYear-b.matYear);
 
   const ideasCount=ideas.length>10?'10+':ideas.length;
   countEl.textContent=ideas.length
@@ -3621,6 +3648,7 @@ function switchTab(id,el){
 loadRatingsLocal();
 renderMMDGrid();
 renderRatingTable();
+loadCusipRatingCache();
 loadBonds();
 </script>
 </body>
