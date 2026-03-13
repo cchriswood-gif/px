@@ -360,8 +360,13 @@
     <input type="file" id="comp-file" accept=".csv,.xlsx,.xls" style="display:none;" onchange="loadBulkTrades(event)">
     <div id="comp-msg" style="font-size:11px;color:#4ade80;margin-top:8px;display:none;"></div>
     <hr class="section-divider">
+    <label class="slabel">OR PASTE MOSB NARRATIVE EMAIL</label>
+    <p style="font-size:11px;color:#4a7fa5;margin-bottom:8px;">Paste the daily MOSB color email directly — X will extract all CUSIPs, yields, spreads and add to comps DB.</p>
+    <textarea id="narrative-paste" rows="6" placeholder="Paste MOSB narrative email here...&#10;e.g. (64966SKE5) (Aa2/AA) $5mln+ New York City GO 5s 8/2028 were purchased at 2.29% +12bps..." style="width:100%;background:#0a1628;color:#c9d8e8;border:1px solid #1e3a5f;border-radius:6px;padding:10px;font-size:11px;font-family:monospace;box-sizing:border-box;resize:vertical;"></textarea>
+    <button onclick="loadNarrativeComps()" style="margin-top:8px;padding:7px 18px;background:#1e3a5f;color:#38bdf8;border:1px solid #38bdf8;border-radius:4px;cursor:pointer;font-size:11px;letter-spacing:1px;">LOAD NARRATIVE</button>
+    <div id="narrative-msg" style="font-size:11px;color:#4ade80;margin-top:6px;display:none;"></div>
 
-    <div id="comp-summary" style="display:none;">
+    <hr class="section-divider">
       <label class="slabel">LOADED TRADE DATABASE</label>
       <div id="comp-summary-content" class="loaded-box"></div>
     </div>
@@ -1227,6 +1232,59 @@ function dDrop(e,cb){
 function loadEmmaCusip(e){processEmmaCusipFiles(Array.from(e.target.files));e.target.value='';}
 function loadBulkTrades(e){processCompFile(e.target.files[0]);e.target.value='';}
 
+function loadNarrativeComps(){
+  const text=document.getElementById('narrative-paste').value.trim();
+  const msg=document.getElementById('narrative-msg');
+  if(!text){msg.textContent='Nothing to parse';msg.style.color='#f87171';msg.style.display='block';setTimeout(()=>msg.style.display='none',3000);return;}
+  
+  const today=new Date();
+  const dateStr=`${today.getMonth()+1}/${today.getDate()}/${today.getFullYear()}`;
+  // Simple pattern: find CUSIP then scan forward for yield%
+  const cusipRe=/\(([A-Z0-9]{9})\)/g;
+  const results=[];
+  const seen=new Set();
+  let cm;
+  while((cm=cusipRe.exec(text))!==null){
+    const cusip=cm[1];
+    if(seen.has(cusip))continue;
+    // Get chunk of text after this CUSIP (up to 400 chars)
+    const chunk=text.slice(cm.index,cm.index+400);
+    // Extract cpn + maturity: e.g. "5s 8/2028" or "5.25s 6/2050"
+    const mtyM=chunk.match(/([\d.]+)s\s+(\d{1,2})\/(\d{4})/);
+    // Extract yield: "at 2.29%" or "at 4.32%"
+    const yldM=chunk.match(/\bat\s+([\d.]+)%/);
+    // Extract issuer description after $xxxmln
+    const descM=chunk.match(/\$[\d.]+\s*(?:mln\+?|bln\+?)?\s*([^$\(]+?)\s+[\d.]+s/);
+    if(!mtyM||!yldM)continue;
+    seen.add(cusip);
+    const cpn=parseFloat(mtyM[1]);
+    const matMonth=parseInt(mtyM[2]);
+    const matYear=parseInt(mtyM[3]);
+    const yld=parseFloat(yldM[1]);
+    const desc=descM?descM[1].trim().slice(0,50):'';
+    if(!matYear||!yld||yld<1||yld>10)continue;
+    results.push({cusip,desc,cpn,matYear,matDate:`${matMonth}/1/${matYear}`,yield:yld,date:dateStr,par:1000000});
+  }
+  
+  if(!results.length){
+    msg.textContent='No bonds found — check format';msg.style.color='#f87171';msg.style.display='block';
+    setTimeout(()=>msg.style.display='none',4000);return;
+  }
+  
+  // Merge into bulkTrades — skip dupes by CUSIP
+  let added=0;
+  for(const r of results){
+    if(!bulkTrades.find(t=>t.cusip===r.cusip)){bulkTrades.push(r);added++;}
+  }
+  
+  recalcAll();
+  updateStats();
+  document.getElementById('narrative-paste').value='';
+  msg.textContent=`✓ Loaded ${added} bonds from narrative (${results.length} found)`;
+  msg.style.color='#4ade80';msg.style.display='block';
+  setTimeout(()=>msg.style.display='none',5000);
+}
+
 // Convert XLSX file to TSV/CSV text using SheetJS
 function xlsxToText(arrayBuffer){
   const wb=XLSX.read(arrayBuffer,{type:'array'});
@@ -2060,33 +2118,37 @@ function parseHousingBidRun(text, dbg){
     const matYear=parseMatYear(mtyStr);
     if(!matYear||matYear<2025||matYear>2075)continue;
     const afterMty=rest.slice(rest.indexOf(cpnMtyM[0])+cpnMtyM[0].length);
-    // Optional call date
-    const callM=afterMty.match(/^\s*(\d{2}\/\d{2}\/\d{2})/);
-    const afterCall=callM?afterMty.slice(callM[0].length):afterMty;
-    // Skip optional NxtPut date (second date after call)
-    const putM=afterCall.match(/^\s*(\d{2}\/\d{2}\/\d{2})/);
-    const afterPut=putM?afterCall.slice(putM[0].length):afterCall;
-    // Handle two column orders:
-    // Order A: Sz(M) then Px then YTW  e.g. "750 112.734 2.95"
-    // Order B: Px then YTW then Sz(M)  e.g. "112.734 2.95 750"
-    const numA=afterPut.match(/^\s*(\d[\d,]*)\s+(\d{2,3}\.\d{3})\s+(\d\.\d{2,3})/); // sz px ytw
-    const numB=afterPut.match(/^\s*(\d{2,3}\.\d{3})\s+(\d\.\d{2,3})\s+(\d[\d,]*)/); // px ytw sz
-    const numM=numA||numB;
-    if(!numM){dbg.push('SKIP hsg (no px/yield): '+cusip+' "'+afterPut.slice(0,30)+'"');continue;}
-    const size=numA ? parseFloat(numA[1].replace(/,/g,''))/1000 : parseFloat(numB[3].replace(/,/g,''))/1000;
-    const ytw=numA ? parseFloat(numA[3]) : parseFloat(numB[2]);
-    // Ratings come after the 3 numbers
-    const afterNums=afterPut.slice(numM.index+numM[0].length).trim();
-    const rtgToks=afterNums.split(/\s+/).filter(Boolean);
+    // Call date may appear anywhere after maturity (last date in segment)
+    const allDates=[...afterMty.matchAll(/(\d{2}\/\d{2}\/\d{2})/g)];
+    const callDateStr=allDates.length?allDates[allDates.length-1][1]:null;
+    const callYear=callDateStr?parseMatYear(callDateStr):null;
+    const effectiveCallYear=(callYear&&callYear<matYear)?callYear:null;
+    // afterPut = everything after stripping all dates
+    const afterPut=afterMty.replace(/\d{2}\/\d{2}\/\d{2}/g,'').replace(/\s+/g,' ').trim();
+    // Strip any rating tokens (AA-, Aa2 etc) that may appear between numbers
+    const afterPutClean=afterPut.replace(/(?<!\d)(Aaa|Aa[123]?|Baa[123]?|Ba[123]?|AAA|AA[+-]?|BBB[+-]?|BB[+-]?|A[123+-]?|B[123+-]?|NR|N\.A\.)(?!\d)/g,'').replace(/\s+/g,' ').trim();
+    // Handle column orders — some runs have extra BVAL column:
+    // Order A: Sz(M) Px YTW  e.g. "750 112.734 2.95"
+    // Order B: Px YTW Sz(M)  e.g. "112.734 2.95 750"
+    // Order C: Sz(M) BVAL YTW Px  e.g. "3415 4.394 4.268 96.500" (BVAL run)
+    const numA=afterPutClean.match(/^\s*(\d[\d,]*)\s+(\d{2,3}\.\d{3})\s+(\d\.\d{2,3})/); // sz px ytw
+    const numB=afterPutClean.match(/^\s*(\d{2,3}\.\d{3})\s+(\d\.\d{2,3})\s+(\d[\d,]*)/); // px ytw sz
+    const numC=afterPutClean.match(/^\s*(\d[\d,]*)\s+(\d\.\d{2,3})\s+(\d\.\d{2,3})\s+(\d{2,3}\.\d{3})/); // sz bval ytw px
+    const numM=numA||numB||numC;
+    if(!numM){dbg.push('SKIP hsg (no px/yield): '+cusip+' "'+afterPutClean.slice(0,30)+'"');continue;}
+    const size=numC ? parseFloat(numC[1].replace(/,/g,''))/1000 : numA ? parseFloat(numA[1].replace(/,/g,''))/1000 : parseFloat(numB[3].replace(/,/g,''))/1000;
+    const ytw=numC ? parseFloat(numC[3]) : numA ? parseFloat(numA[3]) : parseFloat(numB[2]);
     if(ytw<1||ytw>20)continue;
-    const rawMoody=(rtgToks[0]||'').trim();
-    const rawSP=(rtgToks[1]||'').trim();
-    const moody=rawMoody&&rawMoody!=='N.A.'&&/^(Aaa|Aa|A|Baa|Ba|B|NR)/.test(rawMoody)?rawMoody:null;
-    const sp=rawSP&&rawSP!=='N.A.'&&/^(AAA|AA|A|BBB|BB|B|NR)/.test(rawSP)?rawSP:null;
+    // Extract ratings directly from afterPut — may be inline between numbers
+    const rtgMatches=[...afterPut.matchAll(/\b(Aaa|Aa[123]?|A[123]?|Baa[123]?|Ba[123]?|B[123]?|AAA|AA[+-]?|A[+-]?|BBB[+-]?|BB[+-]?|B[+-]?)\b/g)].map(m=>m[1]);
+    const rawSP=rtgMatches.find(r=>/^(AAA|AA|A|BBB|BB|B)/.test(r))||null;
+    const rawMoody=rtgMatches.find(r=>/^(Aaa|Aa|A[123]|Baa|Ba|B[123])/.test(r))||null;
+    const moody=rawMoody||null;
+    const sp=rawSP||null;
     const rating=pickRating(moody,sp);
-    dbg.push('✓ HSG '+cusip+' "'+issuer+'" mat='+matYear+' ytw='+ytw+' sz='+size+(callM?' call='+callM[1]:'')+(rating?' rtg='+rating:''));
+    dbg.push('✓ HSG '+cusip+' "'+issuer+'" mat='+matYear+' ytw='+ytw+' sz='+size+(effectiveCallYear?' call='+effectiveCallYear:'')+(rating?' rtg='+rating:''));
     seen.add(cusip);
-    result.push({cusip,issuer,state:st,cpn,matYear,ytw,size,moody,sp,rating});
+    result.push({cusip,issuer,state:st,cpn,matYear,callYear:effectiveCallYear,ytw,size,moody,sp,rating});
   }
   return result;
 }
