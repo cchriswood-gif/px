@@ -2610,6 +2610,7 @@ function parseImgrText(text){
     if(/CUSIP/i.test(lines[i])&&/Coupon/i.test(lines[i])){dataStart=i+1;break;}
   }
   console.log(`IMGR: dataStart=${dataStart}, data lines=${lines.length-dataStart}`);
+  const headerLine=(dataStart>0?lines[dataStart-1]:lines[0])||'';
   const result=[],skipped=[];
   const parseDate=s=>{
     if(!s||s==='#N/A N/A'||!s.includes('/'))return null;
@@ -2620,87 +2621,62 @@ function parseImgrText(text){
     if(!s||s==='#N/A N/A'||s.trim()===''||s==='N/A')return null;
     return s.trim();
   };
-  // Detect column layout by inspecting header row
-  // Layout A (paste/TSV): header contains "Next Call Date" and CUSIP is col 4
-  // Layout B (Excel export): no "Next Call Date", CUSIP is col 1
-  const headerLine=(lines[dataStart-1]||lines[0]||'').toLowerCase();
-  const isLayoutB=headerLine.includes('cusip')&&!headerLine.includes('next call')&&
-    headerLine.split(delim)[1]&&/cusip/i.test(headerLine.split(delim)[1]);
-  console.log(`IMGR layout: ${isLayoutB?'B (Excel export)':'A (paste/TSV)'}`);
+  // Build header-name → index map (case-insensitive, trim)
+  const hdr=headerLine.split(delim).map(h=>h.trim().toLowerCase());
+  const col=name=>hdr.findIndex(h=>h.includes(name.toLowerCase()));
+  // Required columns
+  const C_CUSIP=col('cusip');
+  const C_NAME=col('short name');
+  const C_STATE=col('state');
+  const C_CPN=col('coupon');
+  const C_MAT=col('maturity');
+  const C_CALL=col('next call');
+  const C_YTW=col('ask yield');
+  const C_PX=col('ask price');
+  const C_SIZE=col('ask size');
+  const C_SPREAD=col('ask spread');
+  // Ratings — prefer LT Best, fall back to plain Rating
+  const C_SP_LT=hdr.findIndex(h=>h.includes('s&p')&&h.includes('long term best'));
+  const C_MDY_LT=hdr.findIndex(h=>h.includes('moody')&&h.includes('long term best'));
+  const C_SP=hdr.findIndex(h=>h.includes('s&p')&&!h.includes('long term best'));
+  const C_MDY=hdr.findIndex(h=>h.includes('moody')&&!h.includes('long term best'));
+  const C_REFUND=col('maturity / refund');
+  const C_TAX=col('tax provision');
+  const C_PREREF=col('pre-refunded');
+  const C_IND=col('industry');
+  console.log(`IMGR cols: cusip=${C_CUSIP} mat=${C_MAT} call=${C_CALL} ytw=${C_YTW} size=${C_SIZE} sp_lt=${C_SP_LT} mdy_lt=${C_MDY_LT} ind=${C_IND}`);
+  if(C_CUSIP<0||C_MAT<0||C_YTW<0){
+    return{bonds:[],skipped:[],msg:'Missing required columns (CUSIP / Maturity / Ask Yield) — check header row'};
+  }
   const seen=new Set();
   for(let i=dataStart;i<lines.length;i++){
     const f=lines[i].split(delim);
-    if(f.length<10)continue;
-    let cusip,issuer,state,cpn,matYear,ytw,px,sizeRaw,spreadRaw,sp,moody,refundType,taxProv,preRefDate,industry;
-    if(isLayoutB){
-      // Layout B: Ref Security(0) CUSIP(1) Short Name(2) State(3) Coupon(4) Maturity(5)
-      // Ask Yield(6) Ask Price(7) BVAL(8) MSRB(9) Dealer(10) Source(11) Depth(12) Time(13)
-      // Ask Size(14) Ask Spread(15) Benchmark(16) Ref Benchmark(17) Sender(18)
-      // Adv Refund Type(19) S&P(20) Moody's(21) Mat/Refund Type(22) Tax Provision(23)
-      // Pre-ref Mat Date(24) Industry(25)
-      cusip=(f[1]||'').trim();
-      issuer=(f[2]||'').trim();
-      state=(f[3]||'').trim();
-      cpn=parseFloat(f[4])||null;
-      matYear=parseDate(f[5]);
-      ytw=parseFloat(f[6])||null;
-      px=parseFloat(f[7])||null;
-      sizeRaw=parseFloat(f[14])||null;
-      spreadRaw=parseFloat(f[15])||null;
-      sp=cleanRtg(f[20]);
-      moody=cleanRtg(f[21]);
-      refundType=(f[22]||'').toUpperCase();
-      taxProv=(f[23]||'').toUpperCase();
-      preRefDate=(f[24]||'').trim();
-      industry=(f[25]||'').trim();
-    } else {
-      // Layout A (original paste/TSV format)
-      cusip=(f[4]||'').trim();
-      issuer=(f[5]||'').trim();
-      state=(f[6]||'').trim();
-      cpn=parseFloat(f[7])||null;
-      matYear=parseDate(f[8]);
-      const nextCallYear=parseDate((f[9]||'').trim());
-      px=parseFloat(f[10])||null;
-      const spLT=cleanRtg(f[11]);
-      const moodyLT=cleanRtg(f[12]);
-      ytw=parseFloat(f[13])||null;
-      sizeRaw=parseFloat(f[14])||null;
-      spreadRaw=parseFloat(f[15])||null;
-      sp=spLT||cleanRtg(f[21]);
-      moody=moodyLT||cleanRtg(f[22]);
-      refundType=(f[23]||'').toUpperCase();
-      taxProv=(f[24]||'').toUpperCase();
-      preRefDate=(f[25]||'').trim();
-      industry=(f[26]||'').trim();
-      // Layout A has next call date — handle here
-      const preRefCallYear=parseDate(preRefDate);
-      const rawCallYear=nextCallYear||preRefCallYear||null;
-      const effectiveCallYear=(rawCallYear&&rawCallYear<matYear)?rawCallYear:null;
-      if(!cusip||cusip.length<8)continue;
-      if(seen.has(cusip)){skipped.push(cusip+' (dup in file)');continue;}
-      if(!matYear){skipped.push(cusip+' (no mat)');continue;}
-      if(!ytw||ytw<1.0||ytw>15){skipped.push(cusip+' (bad yield '+f[13]+')');continue;}
-      const size=sizeRaw?Math.round(sizeRaw/1000)/1000:null;
-      const spread=spreadRaw&&spreadRaw>0?Math.round(spreadRaw):null;
-      const taxable=!taxProv.includes('TAX-EXEMPT')&&!taxProv.includes('AMT')&&!taxProv.includes('ST TAX-EXEMPT');
-      const amt=taxProv.includes('AMT');
-      const rating=moody||sp||null;
-      seen.add(cusip);
-      result.push({cusip,issuer,state,cpn,matYear,callYear:effectiveCallYear,
-        ytw,px,spread,size,moody,sp,rating,industry,taxable,amt,
-        notes:f[16]?f[16].trim():''});
-      continue;
-    }
-    // Layout B shared finalization
+    if(f.length<5)continue;
+    const get=c=>c>=0?(f[c]||'').trim():'';
+    const cusip=get(C_CUSIP);
     if(!cusip||cusip.length<8)continue;
-    if(seen.has(cusip)){skipped.push(cusip+' (dup in file)');continue;}
+    if(seen.has(cusip)){skipped.push(cusip+' (dup)');continue;}
+    const issuer=get(C_NAME);
+    const state=get(C_STATE);
+    const cpn=parseFloat(get(C_CPN))||null;
+    const matYear=parseDate(get(C_MAT));
     if(!matYear){skipped.push(cusip+' (no mat)');continue;}
+    const nextCallYear=C_CALL>=0?parseDate(get(C_CALL)):null;
+    const ytw=parseFloat(get(C_YTW))||null;
     if(!ytw||ytw<1.0||ytw>15){skipped.push(cusip+' (bad yield)');continue;}
-    const preRefCallYear=parseDate(preRefDate);
-    const effectiveCallYear=(preRefCallYear&&preRefCallYear<matYear)?preRefCallYear:null;
+    const px=parseFloat(get(C_PX))||null;
+    const sizeRaw=parseFloat(get(C_SIZE))||null;
     const size=sizeRaw?Math.round(sizeRaw/1000)/1000:null;
+    const spreadRaw=parseFloat(get(C_SPREAD))||null;
     const spread=spreadRaw&&spreadRaw>0?Math.round(spreadRaw):null;
+    const sp=(C_SP_LT>=0?cleanRtg(get(C_SP_LT)):null)||(C_SP>=0?cleanRtg(get(C_SP)):null);
+    const moody=(C_MDY_LT>=0?cleanRtg(get(C_MDY_LT)):null)||(C_MDY>=0?cleanRtg(get(C_MDY)):null);
+    const taxProv=get(C_TAX).toUpperCase();
+    const preRefDate=get(C_PREREF);
+    const preRefCallYear=parseDate(preRefDate);
+    const rawCallYear=nextCallYear||preRefCallYear||null;
+    const effectiveCallYear=(rawCallYear&&rawCallYear<matYear)?rawCallYear:null;
+    const industry=get(C_IND);
     const taxable=!taxProv.includes('TAX-EXEMPT')&&!taxProv.includes('AMT')&&!taxProv.includes('ST TAX-EXEMPT');
     const amt=taxProv.includes('AMT');
     const rating=moody||sp||null;
