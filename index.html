@@ -311,6 +311,7 @@
             <th onclick="sortBy('matYear')">MAT</th>
             <th onclick="sortBy('callYear')">CALL</th>
             <th onclick="sortBy('sector')">SECTOR</th>
+            <th onclick="sortBy('issueSize')">ISS SZ</th>
             <th onclick="sortBy('ytw')">YTW</th>
             <th onclick="sortBy('mmdVal')">MMD</th>
             <th onclick="sortBy('spread')">SPRD</th>
@@ -2655,7 +2656,8 @@ function parseImgrText(text){
   const C_TAX=col('tax provision');
   const C_PREREF=col('pre-refunded');
   const C_IND=col('industry');
-  console.log(`IMGR cols: cusip=${C_CUSIP} mat=${C_MAT} call=${C_CALL} ytw=${C_YTW} size=${C_SIZE} sp_lt=${C_SP_LT} mdy_lt=${C_MDY_LT} ind=${C_IND}`);
+  const C_ISSUESZ=col('issue size');
+  console.log(`IMGR cols: cusip=${C_CUSIP} mat=${C_MAT} call=${C_CALL} ytw=${C_YTW} size=${C_SIZE} sp_lt=${C_SP_LT} mdy_lt=${C_MDY_LT} ind=${C_IND} issuesz=${C_ISSUESZ}`);
   if(C_CUSIP<0||C_MAT<0||C_YTW<0){
     return{bonds:[],skipped:[],msg:'Missing required columns (CUSIP / Maturity / Ask Yield) — check header row'};
   }
@@ -2688,12 +2690,14 @@ function parseImgrText(text){
     const rawCallYear=nextCallYear||preRefCallYear||null;
     const effectiveCallYear=(rawCallYear&&rawCallYear<matYear)?rawCallYear:null;
     const industry=get(C_IND);
+    const issueSizeRaw=C_ISSUESZ>=0?parseFloat(get(C_ISSUESZ))||null:null;
+    const issueSize=issueSizeRaw?Math.round(issueSizeRaw/1000000):null; // $MM rounded
     const taxable=!taxProv.includes('TAX-EXEMPT')&&!taxProv.includes('AMT')&&!taxProv.includes('ST TAX-EXEMPT');
     const amt=taxProv.includes('AMT');
     const rating=moody||sp||null;
     seen.add(cusip);
     result.push({cusip,issuer,state,cpn,matYear,callYear:effectiveCallYear,
-      ytw,px,spread,size,moody,sp,rating,industry,taxable,amt,notes:''});
+      ytw,px,spread,size,moody,sp,rating,industry,issueSize,taxable,amt,notes:''});
   }
   return{bonds:result,skipped,msg:`Parsed ${result.length} bonds, skipped ${skipped.length}`};
 }
@@ -3114,6 +3118,7 @@ function renderTable(){
       <td>${b.matYear||"—"}</td>
       <td style="color:#4a7fa5">${b.callYear||"NC"}</td>
       <td style="color:var(--text-muted);font-size:11px">${b.sector||"—"}</td>
+      <td style="color:#4a7fa5;font-size:11px">${b.issueSize!=null?b.issueSize+'MM':"—"}</td>
       <td style="font-weight:700">${b.ytw!=null?b.ytw.toFixed(2)+"%":"—"}</td>
       <td style="color:#4a7fa5">${b.mmdVal!=null?b.mmdVal.toFixed(2)+"%":"—"}</td>
       <td class="${spreadClass}">${b.spread!=null?(b.spread>0?"+":"")+b.spread:"—"}${ctx}</td>
@@ -3565,8 +3570,9 @@ function renderBestIdeas(){
   // Sort by compDiff descending (most cheap first)
   ideas.sort((a,b)=>b.compDiff-a.compDiff);
 
+  const ideasCount=ideas.length>10?'10+':ideas.length;
   countEl.textContent=ideas.length
-    ?`${ideas.length} bond${ideas.length!==1?'s':''} — ${bvalLoaded?'all 3 signals':'band + comps'} confirm CHEAP`
+    ?`${ideasCount} bond${ideas.length!==1?'s':''} — ${bvalLoaded?'all 3 signals':'band + comps'} confirm CHEAP`
     :`No ${bvalLoaded?'triple':'dual'}-CHEAP bonds in current list — check back after IMGR refresh or MOSB upload`;
 
   if(!ideas.length){container.innerHTML='';return;}
@@ -3587,6 +3593,7 @@ function renderBestIdeas(){
       <td><span class="badge pill-cheap">+${b.compDiff} CHEAP</span></td>
       <td>${(()=>{const bv=getBvalSignal(b);if(!bv)return '<span style="color:var(--text-dim)">—</span>';const sign=bv.diff>0?'+':'';return `<span class="badge pill-cheap">${sign}${bv.diff} CHEAP</span>`;})()}</td>
       <td style="color:#4a7fa5;font-size:10px">${b.compCount} comps</td>
+      <td style="color:#4a7fa5;font-size:11px">${b.issueSize!=null?b.issueSize+'MM':'—'}</td>
       <td class="time-cell">${b.time||'—'}</td>
     </tr>`;
   }).join('');
@@ -3594,7 +3601,7 @@ function renderBestIdeas(){
   container.innerHTML=`<table>
     <thead><tr>
       <th>CUSIP</th><th>ISSUER</th><th>SZ</th><th>RTG</th><th>CPN</th>
-      <th>MAT</th><th>CALL</th><th>YTW</th><th>SPRD</th><th>BAND R/C</th><th>COMP R/C</th><th>BVAL R/C</th><th>COMPS</th><th>TIME</th>
+      <th>MAT</th><th>CALL</th><th>YTW</th><th>SPRD</th><th>BAND R/C</th><th>COMP R/C</th><th>BVAL R/C</th><th>COMPS</th><th>ISS SZ</th><th>TIME</th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
