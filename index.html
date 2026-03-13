@@ -594,6 +594,31 @@ function getGasPrepayBand(rating){
 // Invalidate cache when MOSB loads
 function invalidateGasBands(){_gasPrepayBands=null;}
 
+function sectorFromIndustry(code, amt){
+  if(!code)return null;
+  switch(code.toUpperCase()){
+    case 'APT': return amt?'airportAMT':'airportNonAMT';
+    case 'MED': return 'hospital';
+    case 'HGR': return 'univ';
+    case 'EDU': return 'univ';
+    case 'SCD': return 'go';
+    case 'WTR': return 'water';
+    case 'GOB': return 'go';
+    case 'GEN': return 'go';
+    case 'TRN': return 'toll';
+    case 'SFH': return 'housing';
+    case 'MFH': return 'housing';
+    case 'HSG': return 'housing';
+    case 'PWR': return 'salesTax';
+    case 'UTL': return 'salesTax';
+    case 'DEV': return 'salesTax';
+    case 'BBK': return 'go';
+    case 'MEL': return 'go';
+    case 'BAB': return 'go';
+    default: return null;
+  }
+}
+
 function detectSector(issuer,cusip,taxable,amt){
   if(!issuer)return null;
   const u=issuer.toUpperCase();
@@ -1429,6 +1454,8 @@ const INSURER_RATINGS={
   'BAM':'AA',       // Build America Mutual — AA S&P
   'AGM':'AA',       // Assured Guaranty Municipal — A1/AA
   'ASSURED':'AA',
+  'PSF':'Aaa',      // Texas Permanent School Fund — Aaa/AAA
+  'PERMANENT SCHOOL':'Aaa',
   'FGIC':null,      // defunct
   'AMBAC':null,     // defunct
   'MBIA':null,      // effectively defunct
@@ -1591,7 +1618,7 @@ function parseMsgFormat(text, dbg){
 
     // Size
     const sizeM=line.match(/(\d+(?:\.\d+)?)[mM]\s*@/i)||line.match(/\b(\d{2,5})\b(?=\s+\d+\s+\d{6,})/);
-    const size=sizeM?parseFloat(sizeM[1]):null;
+    const size=sizeM?parseFloat(sizeM[1])/1000:null;
 
     // Issuer — for MOSB format, issuer is the text immediately after CUSIP before first digit
     // For MSG format, clean up the full line
@@ -2319,6 +2346,91 @@ function parseCusipSzIssuerStYtmRun(text,dbg){
   return result;
 }
 
+// Format: CUSIP + Size + Issuer + Moody + SP + State + Cpn + Mty + [callYYc] + YTW + Price + [Notes]
+// e.g. "530576CC945LIBERTY HILL TX WSTWTR TREATMEN.A.AATX5.00009/01/353.07115.737"
+// Header: Security Sz(M) Issuer Mdy S&P St Cpn Mty Call YTW Price Notes
+function isCusipSzIssuerMdySpRun(text){
+  return /Security.*Sz.*Issuer.*Mdy.*S&P.*St.*Cpn.*Mty/i.test(text)||
+    /Security.*Sz.*Issuer.*Mdy.*S&P/i.test(text);
+}
+function parseCusipSzIssuerMdySpRun(text,dbg){
+  const result=[],seen=new Set();
+  const US_ST=new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC','GU','PR','VI']);
+  const MPAT=/^(N\.A\.|Aaa|Aa[123]|A[123]|Baa[123])$/;
+  const SPAT=/^(N\.A\.|AAA|AA\+|AA-|AA|A\+|A-|BBB\+|BBB-|BBB)$/;
+  const DPAT=/^\d{2}\/\d{2}\/\d{2,4}$/;
+  const CPAT=/^\d+\.\d{3}$/;
+  const YPAT=/^\d+\.\d{2,3}$/;
+  const PPAT=/^\d{2,3}\.\d{3}$/;
+  const parseY=d=>{const p=d.split('/');const y=parseInt(p[2]);return y<100?(y<80?2000+y:1900+y):y;};
+  // Accept both spaced ("530576CC9 45 LIBERTY...") and unspaced ("530576CC945LIBERTY...")
+  const lines=text.split('\n').map(l=>l.trim()).filter(l=>/^[A-Z0-9]{9}[\s\d]/.test(l)&&l.length>20);
+  dbg.push('CusipSzIssuerMdySp lines: '+lines.length);
+  for(const raw of lines){
+    const cusip=raw.slice(0,9);
+    if(seen.has(cusip))continue;
+    // Tokenize — split on spaces if spaced, otherwise parse positionally
+    const isSpaced=/^[A-Z0-9]{9}\s/.test(raw);
+    let toks;
+    if(isSpaced){
+      toks=raw.split(/\s+/);
+    } else {
+      // unspaced: extract size digits immediately after CUSIP, rest is one blob
+      // re-join as spaced by splitting on known boundaries
+      const rest=raw.slice(9);
+      const szM=rest.match(/^(\d+)/);
+      if(!szM){dbg.push('SKIP mdysp no sz: '+cusip);continue;}
+      toks=[cusip,szM[1],...rest.slice(szM[0].length).split(/(?=[A-Z]{2}\d+\.\d{3})|(?<=\d{3})/g).map(s=>s.trim()).filter(Boolean)];
+    }
+    // toks[0]=cusip, toks[1]=size, toks[2..n-?]=issuer words + mdy + sp + state + cpn + mat + [call] + ytw + price
+    if(toks.length<8){dbg.push('SKIP mdysp short: '+cusip);continue;}
+    const sz=parseInt(toks[1]);
+    // Walk from end: price, ytw, then optionally a date (call), then mat date, cpn, state, sp, mdy, issuer
+    let arr=toks.slice(2);
+    // Pop price (3 decimals, e.g. 115.737) then ytw (2-3 decimals, e.g. 3.07)
+    // Both can look like numbers — check last two from end, price is always >=10 (3 digits before decimal)
+    // or just pop last two numeric tokens regardless
+    const last=arr[arr.length-1];
+    const secondLast=arr[arr.length-2];
+    if(!/^\d+\.\d+$/.test(last)||!/^\d+\.\d+$/.test(secondLast)){
+      dbg.push('SKIP mdysp no price/ytw: '+cusip+' last='+last+' 2nd='+secondLast);continue;
+    }
+    arr.pop(); // price
+    const ytw=parseFloat(arr.pop()); // ytw
+    // Optional call date
+    let callYear=null;
+    if(DPAT.test(arr[arr.length-1])){callYear=parseY(arr.pop());}
+    // Mat date
+    dbg.push('DBG '+cusip+' arr tail: '+arr.slice(-5).join('|'));
+    if(!DPAT.test(arr[arr.length-1])){dbg.push('SKIP mdysp no mat: '+cusip);continue;}
+    const matYear=parseY(arr.pop());
+    // Cpn
+    if(!CPAT.test(arr[arr.length-1])){dbg.push('SKIP mdysp no cpn: '+cusip);continue;}
+    const cpn=parseFloat(arr.pop());
+    // State
+    if(!US_ST.has(arr[arr.length-1])){dbg.push('SKIP mdysp no state: '+cusip+' got='+arr[arr.length-1]);continue;}
+    const state=arr.pop();
+    // S&P
+    if(!SPAT.test(arr[arr.length-1])){dbg.push('SKIP mdysp no sp: '+cusip+' got='+arr[arr.length-1]);continue;}
+    const spRaw=arr.pop();
+    // Moody
+    if(!MPAT.test(arr[arr.length-1])){dbg.push('SKIP mdysp no mdy: '+cusip+' got='+arr[arr.length-1]);continue;}
+    const mdyRaw=arr.pop();
+    // Remaining = issuer
+    const issuer=arr.join(' ').trim().slice(0,50);
+    if(!matYear||matYear<2025||matYear>2075)continue;
+    if(!ytw||ytw<1||ytw>15)continue;
+    const moody=mdyRaw==='N.A.'?null:mdyRaw;
+    const sp=spRaw==='N.A.'?null:spRaw;
+    const effectiveCallYear=(callYear&&callYear<matYear)?callYear:null;
+    const rating=pickRating(moody,sp);
+    seen.add(cusip);
+    dbg.push(`✓ MDYSP ${cusip} ${issuer.slice(0,20)} st=${state} mat=${matYear} call=${effectiveCallYear||'NC'} ytw=${ytw} ${rating||'NR'}`);
+    result.push({cusip,issuer,state,cpn,matYear,callYear:effectiveCallYear,ytw,size:sz/1000,moody,sp,rating});
+  }
+  return result;
+}
+
 function isCusipSzIssuerStRun(text){
   const firstLine=text.split('\n').filter(l=>l.trim().length>20&&/^[A-Z0-9]{9}[\s\d]/.test(l.trim()))[0]||'';
   if(/^[A-Z0-9]{9}\d+[A-Z].*[A-Z]{2}\d+\.\d{3}\d{2}\/\d{2}\/\d{2}/.test(firstLine))return true;
@@ -2508,50 +2620,93 @@ function parseImgrText(text){
     if(!s||s==='#N/A N/A'||s.trim()===''||s==='N/A')return null;
     return s.trim();
   };
+  // Detect column layout by inspecting header row
+  // Layout A (paste/TSV): header contains "Next Call Date" and CUSIP is col 4
+  // Layout B (Excel export): no "Next Call Date", CUSIP is col 1
+  const headerLine=(lines[dataStart-1]||lines[0]||'').toLowerCase();
+  const isLayoutB=headerLine.includes('cusip')&&!headerLine.includes('next call')&&
+    headerLine.split(delim)[1]&&/cusip/i.test(headerLine.split(delim)[1]);
+  console.log(`IMGR layout: ${isLayoutB?'B (Excel export)':'A (paste/TSV)'}`);
   const seen=new Set();
   for(let i=dataStart;i<lines.length;i++){
     const f=lines[i].split(delim);
     if(f.length<10)continue;
-    const cusip=(f[4]||'').trim();
+    let cusip,issuer,state,cpn,matYear,ytw,px,sizeRaw,spreadRaw,sp,moody,refundType,taxProv,preRefDate,industry;
+    if(isLayoutB){
+      // Layout B: Ref Security(0) CUSIP(1) Short Name(2) State(3) Coupon(4) Maturity(5)
+      // Ask Yield(6) Ask Price(7) BVAL(8) MSRB(9) Dealer(10) Source(11) Depth(12) Time(13)
+      // Ask Size(14) Ask Spread(15) Benchmark(16) Ref Benchmark(17) Sender(18)
+      // Adv Refund Type(19) S&P(20) Moody's(21) Mat/Refund Type(22) Tax Provision(23)
+      // Pre-ref Mat Date(24) Industry(25)
+      cusip=(f[1]||'').trim();
+      issuer=(f[2]||'').trim();
+      state=(f[3]||'').trim();
+      cpn=parseFloat(f[4])||null;
+      matYear=parseDate(f[5]);
+      ytw=parseFloat(f[6])||null;
+      px=parseFloat(f[7])||null;
+      sizeRaw=parseFloat(f[14])||null;
+      spreadRaw=parseFloat(f[15])||null;
+      sp=cleanRtg(f[20]);
+      moody=cleanRtg(f[21]);
+      refundType=(f[22]||'').toUpperCase();
+      taxProv=(f[23]||'').toUpperCase();
+      preRefDate=(f[24]||'').trim();
+      industry=(f[25]||'').trim();
+    } else {
+      // Layout A (original paste/TSV format)
+      cusip=(f[4]||'').trim();
+      issuer=(f[5]||'').trim();
+      state=(f[6]||'').trim();
+      cpn=parseFloat(f[7])||null;
+      matYear=parseDate(f[8]);
+      const nextCallYear=parseDate((f[9]||'').trim());
+      px=parseFloat(f[10])||null;
+      const spLT=cleanRtg(f[11]);
+      const moodyLT=cleanRtg(f[12]);
+      ytw=parseFloat(f[13])||null;
+      sizeRaw=parseFloat(f[14])||null;
+      spreadRaw=parseFloat(f[15])||null;
+      sp=spLT||cleanRtg(f[21]);
+      moody=moodyLT||cleanRtg(f[22]);
+      refundType=(f[23]||'').toUpperCase();
+      taxProv=(f[24]||'').toUpperCase();
+      preRefDate=(f[25]||'').trim();
+      industry=(f[26]||'').trim();
+      // Layout A has next call date — handle here
+      const preRefCallYear=parseDate(preRefDate);
+      const rawCallYear=nextCallYear||preRefCallYear||null;
+      const effectiveCallYear=(rawCallYear&&rawCallYear<matYear)?rawCallYear:null;
+      if(!cusip||cusip.length<8)continue;
+      if(seen.has(cusip)){skipped.push(cusip+' (dup in file)');continue;}
+      if(!matYear){skipped.push(cusip+' (no mat)');continue;}
+      if(!ytw||ytw<1.0||ytw>15){skipped.push(cusip+' (bad yield '+f[13]+')');continue;}
+      const size=sizeRaw?Math.round(sizeRaw/1000)/1000:null;
+      const spread=spreadRaw&&spreadRaw>0?Math.round(spreadRaw):null;
+      const taxable=!taxProv.includes('TAX-EXEMPT')&&!taxProv.includes('AMT')&&!taxProv.includes('ST TAX-EXEMPT');
+      const amt=taxProv.includes('AMT');
+      const rating=moody||sp||null;
+      seen.add(cusip);
+      result.push({cusip,issuer,state,cpn,matYear,callYear:effectiveCallYear,
+        ytw,px,spread,size,moody,sp,rating,industry,taxable,amt,
+        notes:f[16]?f[16].trim():''});
+      continue;
+    }
+    // Layout B shared finalization
     if(!cusip||cusip.length<8)continue;
     if(seen.has(cusip)){skipped.push(cusip+' (dup in file)');continue;}
-    const issuer=(f[5]||'').trim();
-    const state=(f[6]||'').trim();
-    const cpn=parseFloat(f[7])||null;
-    const matYear=parseDate(f[8]);
     if(!matYear){skipped.push(cusip+' (no mat)');continue;}
-    // Col 9=Next Call Date, 10=Ask Price, 11=S&P LT Best, 12=Moody's LT Best
-    // 13=Ask Yield, 14=Ask Size, 15=Ask Spread, 21=S&P Rating, 22=Moody's Rating
-    // 23=Maturity/Refund Type, 24=Tax Provision, 25=Pre-refunded Maturity Date, 26=Industry
-    const nextCallDate=(f[9]||'').trim();
-    const nextCallYear=parseDate(nextCallDate);
-    const px=parseFloat(f[10])||null;
-    const spLT=cleanRtg(f[11]);
-    const moodyLT=cleanRtg(f[12]);
-    const ytw=parseFloat(f[13])||null;
-    if(!ytw||ytw<1.0||ytw>15){skipped.push(cusip+' (bad yield '+f[13]+')');continue;}
-    const sizeRaw=parseFloat(f[14])||null;
-    const size=sizeRaw?Math.round(sizeRaw/1000)/1000:null; // dollars -> millions
-    const spreadRaw=parseFloat(f[15])||null;
+    if(!ytw||ytw<1.0||ytw>15){skipped.push(cusip+' (bad yield)');continue;}
+    const preRefCallYear=parseDate(preRefDate);
+    const effectiveCallYear=(preRefCallYear&&preRefCallYear<matYear)?preRefCallYear:null;
+    const size=sizeRaw?Math.round(sizeRaw/1000)/1000:null;
     const spread=spreadRaw&&spreadRaw>0?Math.round(spreadRaw):null;
-    const sp=spLT||cleanRtg(f[21]); // prefer LT Best Rating, fallback to col 21
-    const moody=moodyLT||cleanRtg(f[22]); // prefer LT Best Rating, fallback to col 22
-    const refundType=(f[23]||'').toUpperCase();
-    const taxProv=(f[24]||'').toUpperCase();
-    const callDate=(f[25]||'').trim();
-    const preRefCallYear=parseDate(callDate);
-    // Use Next Call Date first, then Pre-refunded Maturity Date
-    const rawCallYear=nextCallYear||preRefCallYear||null;
-    const effectiveCallYear=(rawCallYear&&rawCallYear<matYear)?rawCallYear:null;
-    const industry=(f[26]||'').trim();
     const taxable=!taxProv.includes('TAX-EXEMPT')&&!taxProv.includes('AMT')&&!taxProv.includes('ST TAX-EXEMPT');
     const amt=taxProv.includes('AMT');
-    // Rating: prefer Moody's, fallback S&P
     const rating=moody||sp||null;
     seen.add(cusip);
     result.push({cusip,issuer,state,cpn,matYear,callYear:effectiveCallYear,
-      ytw,px,spread,size,moody,sp,rating,industry,taxable,amt,
-      notes:f[16]?f[16].trim():''});
+      ytw,px,spread,size,moody,sp,rating,industry,taxable,amt,notes:''});
   }
   return{bonds:result,skipped,msg:`Parsed ${result.length} bonds, skipped ${skipped.length}`};
 }
@@ -2657,6 +2812,9 @@ function parseBloombergBonds(rawText){
   } else if(isCusipSzIssuerStYtmRun(text)){
     dbg.push("MODE: CUSIP-Sz-Issuer-St-YTM Run");
     result=parseCusipSzIssuerStYtmRun(text,dbg);
+  } else if(isCusipSzIssuerMdySpRun(text)){
+    dbg.push("MODE: CUSIP-Sz-Issuer-Mdy-Sp Run");
+    result=parseCusipSzIssuerMdySpRun(text,dbg);
   } else if(isCusipSzIssuerStRun(text)){
     dbg.push("MODE: CUSIP-Sz-Issuer-St Run");
     result=parseCusipSzIssuerStRun(text,dbg);
@@ -2726,7 +2884,7 @@ function buildBondRecord(b,time){
   const ratio=ytw!=null&&tsyVal?Math.round((ytw/tsyVal)*100):null;
   const rating=getInsuredRating(b.issuer,b.notes)||b.rating||lookupRating(b.issuer);
   const rc=b.taxable?{label:'TAX',cls:'badge-tax'}:(spread!=null?richOrCheap(spread,rating,b.issuer,b.cusip,b.taxable):null);
-  const sector=detectSector(b.issuer,b.cusip,b.taxable,b.amt);
+  const sector=sectorFromIndustry(b.industry,b.amt)||detectSector(b.issuer,b.cusip,b.taxable,b.amt);
   const sectorLabel=sector?sector.replace('airportAMT','Airport AMT').replace('airportNonAMT','Airport').replace('gasPrepay','Gas Prepay').replace('hospital','Hospital').replace('housing','Housing').replace('water','Water').replace('univ','Higher Ed').replace('toll','Transport').replace('cops','COPs').replace('salesTax','Sales Tax').replace('go','GO'):null;
   const bvalSig=getBvalSignal({...b,ytw,rating,sector:sectorLabel,sectorKey:sector,matYear:b.matYear});
   return{...b,ytw,mmdVal,tsyVal,spread,ratio,rating,rc,rcLabel:rc?rc.label:'',time,sector:sectorLabel,sectorKey:sector,bvalDiff:bvalSig?bvalSig.diff:null,bvalLabel:bvalSig?bvalSig.label:null};
@@ -3134,7 +3292,7 @@ function recalcAll(){
     const spread=b.ytw!=null&&mmdVal!=null?Math.round((b.ytw-mmdVal)*100):b.spread;
     const ratio=b.ytw!=null&&tsyVal?Math.round((b.ytw/tsyVal)*100):b.ratio;
     const rc=b.taxable?{label:'TAX',cls:'badge-tax'}:(spread!=null?richOrCheap(spread,rating,b.issuer,b.cusip,b.taxable):null);
-    const sector=detectSector(b.issuer,b.cusip,b.taxable,b.amt);
+    const sector=sectorFromIndustry(b.industry,b.amt)||detectSector(b.issuer,b.cusip,b.taxable,b.amt);
     const sectorLabel=sector?sector
       .replace('airportAMT','Airport AMT')
       .replace('airportNonAMT','Airport')
