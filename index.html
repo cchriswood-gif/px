@@ -2043,15 +2043,24 @@ function parseHousingBidRun(text, dbg){
     // Optional call date
     const callM=afterMty.match(/^\s*(\d{2}\/\d{2}\/\d{2})/);
     const afterCall=callM?afterMty.slice(callM[0].length):afterMty;
-    // SZ (digits) then APx/BPx (dd+.ddd) then AYield/BYield (d.ddd) then optional ratings
-    const numM=afterCall.match(/^\s*(\d+)\s*(\d{2,3}\.\d{3})\s*(\d\.\d{3})\s*([A-Za-z0-9.]+)?\s*([A-Za-z0-9+\-]+)?/);
-    if(!numM){dbg.push('SKIP hsg (no px/yield): '+cusip+' "'+afterCall.slice(0,30)+'"');continue;}
-    const size=parseFloat(numM[1])/1000; // size in MM
-    const ytw=parseFloat(numM[3]);
+    // Skip optional NxtPut date (second date after call)
+    const putM=afterCall.match(/^\s*(\d{2}\/\d{2}\/\d{2})/);
+    const afterPut=putM?afterCall.slice(putM[0].length):afterCall;
+    // Handle two column orders:
+    // Order A: Sz(M) then Px then YTW  e.g. "750 112.734 2.95"
+    // Order B: Px then YTW then Sz(M)  e.g. "112.734 2.95 750"
+    const numA=afterPut.match(/^\s*(\d[\d,]*)\s+(\d{2,3}\.\d{3})\s+(\d\.\d{2,3})/); // sz px ytw
+    const numB=afterPut.match(/^\s*(\d{2,3}\.\d{3})\s+(\d\.\d{2,3})\s+(\d[\d,]*)/); // px ytw sz
+    const numM=numA||numB;
+    if(!numM){dbg.push('SKIP hsg (no px/yield): '+cusip+' "'+afterPut.slice(0,30)+'"');continue;}
+    const size=numA ? parseFloat(numA[1].replace(/,/g,''))/1000 : parseFloat(numB[3].replace(/,/g,''))/1000;
+    const ytw=numA ? parseFloat(numA[3]) : parseFloat(numB[2]);
+    // Ratings come after the 3 numbers
+    const afterNums=afterPut.slice(numM.index+numM[0].length).trim();
+    const rtgToks=afterNums.split(/\s+/).filter(Boolean);
     if(ytw<1||ytw>20)continue;
-    // Parse ratings
-    const rawMoody=(numM[4]||'').trim();
-    const rawSP=(numM[5]||'').trim();
+    const rawMoody=(rtgToks[0]||'').trim();
+    const rawSP=(rtgToks[1]||'').trim();
     const moody=rawMoody&&rawMoody!=='N.A.'&&/^(Aaa|Aa|A|Baa|Ba|B|NR)/.test(rawMoody)?rawMoody:null;
     const sp=rawSP&&rawSP!=='N.A.'&&/^(AAA|AA|A|BBB|BB|B|NR)/.test(rawSP)?rawSP:null;
     const rating=pickRating(moody,sp);
@@ -2179,11 +2188,11 @@ function parseNotesRun(text, dbg){
       const matYear=dates.length>=1?parseY(dates[0]):null;
       const callYear=dates.length>=2?parseY(dates[1]):null;
       if(!matYear||matYear<2025||!ytw){dbg.push('SKIP: '+cusip);continue;}
-      const insRating=getInsuredRating(issuer,notes);
+      const insRating=getInsuredRating(issuer,null);
       const rating=insRating||(moody||fitch||sp||null);
       seen.add(cusip);
       dbg.push(`✓ NOTES ${cusip} ${issuer.slice(0,20)} mat=${matYear} ytw=${ytw} +${spread} ${rating||'NR'}${insRating?' [INS]':''}`);
-      result.push({cusip,issuer,cpn,matYear,callYear,ytw,spread,size:sz,moody,sp,fitch,rating,notes});
+      result.push({cusip,issuer,cpn,matYear,callYear,ytw,spread,size:sz,moody,sp,fitch,rating,notes:''});
     } else {
       // Concatenated format
       let cusip,st,s;
@@ -2213,11 +2222,11 @@ function parseNotesRun(text, dbg){
       const cpnM=beforeDates.match(/(\d+\.\d{3})$/);
       const cpn=cpnM?parseFloat(cpnM[1]):null;
       const issuer=beforeDates.replace(/\d+\.\d{3}$/,'').trim();
-      const insRating=getInsuredRating(issuer,notes);
+      const insRating=getInsuredRating(issuer,null);
       const rating=insRating||(moody||fitch||sp||null);
       seen.add(cusip);
       dbg.push(`✓ NOTES ${cusip} ${issuer.slice(0,20)} mat=${matYear} ytw=${ytw} +${spread} ${rating||'NR'}${insRating?' [INS]':''}`);
-      result.push({cusip,issuer,cpn,matYear,callYear,ytw,spread,size:sz,moody,sp,fitch,rating,notes});
+      result.push({cusip,issuer,cpn,matYear,callYear,ytw,spread,size:sz,moody,sp,fitch,rating,notes:''});
     }
   }
   return result;
@@ -2399,10 +2408,12 @@ function parseCusipSzIssuerMdySpRun(text,dbg){
     const ytw=parseFloat(arr.pop()); // ytw
     // Optional call date
     let callYear=null;
+    // Skip any single-letter tokens (e.g. 'A' for ask side indicator)
+    while(arr.length&&/^[A-Z]$/.test(arr[arr.length-1]))arr.pop();
     if(DPAT.test(arr[arr.length-1])){callYear=parseY(arr.pop());}
     // Mat date
-    dbg.push('DBG '+cusip+' arr tail: '+arr.slice(-5).join('|'));
-    if(!DPAT.test(arr[arr.length-1])){dbg.push('SKIP mdysp no mat: '+cusip);continue;}
+    while(arr.length&&/^[A-Z]$/.test(arr[arr.length-1]))arr.pop();
+    if(!DPAT.test(arr[arr.length-1])){dbg.push('SKIP mdysp no mat: '+cusip+' tail='+arr.slice(-3).join('|'));continue;}
     const matYear=parseY(arr.pop());
     // Cpn
     if(!CPAT.test(arr[arr.length-1])){dbg.push('SKIP mdysp no cpn: '+cusip);continue;}
