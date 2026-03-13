@@ -3545,7 +3545,7 @@ function renderBestIdeas(){
     // BVAL check — only require if curves loaded AND bond has a mapped sector
     if(bvalLoaded){
       const bv=getBvalSignal(b);
-      if(bv&&(bv.label!=='CHEAP'||bv.diff<20))continue; // require 20+ bps cheap to BVAL
+      if(bv&&(bv.label!=='CHEAP'||bv.diff<8))continue; // require 8+ bps cheap to BVAL
       // if bv===null (no curve for this sector) — allow through (no signal = no disqualifier)
     }
     ideas.push({...b,compDiff,compCount:comps.length});
