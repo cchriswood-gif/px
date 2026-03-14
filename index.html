@@ -3307,7 +3307,8 @@ function renderTable(){
 
     // Comps count + comp-based rich/cheap
     const {comps,total:compTotal}=findComps(b);
-    const compLabel=compTotal>comps.length?`${compTotal}`:comps.length>0?`${comps.length}`:'0';
+    const rawCount=compTotal>comps.length?compTotal:comps.length>0?comps.length:0;
+    const compLabel=rawCount>=10?'10+':rawCount>0?`${rawCount}`:'0';
     const compCell=bulkTrades.length
       ? comps.length>0
         ? `<button class="btn-comp" onclick="showComps('${b.cusip}')">${compLabel} COMPS</button>`
@@ -3457,7 +3458,7 @@ function updateStats(){
   const avg=Math.round(ws.reduce((a,b)=>a+b.spread,0)/ws.length);
   const rated=bonds.filter(b=>b.rc&&(b.rc.label==="CHEAP"||b.rc.label==="RICH"||b.rc.label==="FAIR")).length;
 
-  // Sentiment gauge — based on cheap/rich ratio
+  // Sentiment gauge
   let sentLabel,sentColor,sentDesc;
   if(rated>=5){
     const cheapPct=cheap/rated;
@@ -3469,12 +3470,31 @@ function updateStats(){
     sentLabel='— N/A';sentColor='#4a7fa5';sentDesc='Need more bonds';
   }
 
+  // Spread vs history — compare current avg spread to comps DB avg spread vs MMD
+  let histStat='';
+  if(bulkTrades.length>=50){
+    const histSpreads=bulkTrades
+      .filter(t=>t.yield&&t.matYear)
+      .map(t=>{const m=getMMD(t.matYear);return m!=null?Math.round((t.yield-m)*100):null;})
+      .filter(s=>s!=null&&s>-50&&s<300);
+    if(histSpreads.length>=20){
+      const histAvg=Math.round(histSpreads.reduce((a,s)=>a+s,0)/histSpreads.length);
+      const diff=avg-histAvg;
+      const diffStr=(diff>0?'+':'')+diff+'bps';
+      const color=diff>=10?'#4ade80':diff<=-10?'#f87171':'#fbbf24';
+      const label=diff>=10?'WIDE vs HIST':diff<=-10?'TIGHT vs HIST':'FAIR vs HIST';
+      const tip=`Current avg spread ${avg>0?'+':''}${avg}bps vs comps DB avg +${histAvg}bps (${histSpreads.length} trades)`;
+      histStat=`<div class="stat" title="${tip}" style="cursor:help;"><span class="stat-val" style="color:${color}">${diffStr}</span><span class="stat-lbl">${label}</span></div>`;
+    }
+  }
+
   document.getElementById("stats-bar").innerHTML=`
     <div class="stat"><span class="stat-val" style="color:#4ade80">${cheap}</span><span class="stat-lbl">CHEAP</span></div>
     <div class="stat"><span class="stat-val" style="color:#fbbf24">${fair}</span><span class="stat-lbl">FAIR</span></div>
     <div class="stat"><span class="stat-val" style="color:#f87171">${rich}</span><span class="stat-lbl">RICH</span></div>
     <div class="stat"><span class="stat-val">${bonds.length}</span><span class="stat-lbl">TOTAL</span></div>
     <div class="stat"><span class="stat-val">${avg>0?"+":""}${avg}</span><span class="stat-lbl">AVG SPRD</span></div>
+    ${histStat}
     <div class="stat" title="${sentDesc}" style="cursor:help;"><span class="stat-val" style="color:${sentColor};font-size:13px;">${sentLabel}</span><span class="stat-lbl">SENTIMENT</span></div>
     <div class="stat"><span class="stat-val" style="color:#a78bfa">${Object.keys(emmaHistory).length}</span><span class="stat-lbl">EMMA</span></div>
     <div class="stat"><span class="stat-val" style="color:#f59e0b">${bulkTrades.length?bulkTrades.length.toLocaleString():'0'}</span><span class="stat-lbl">COMPS DB</span></div>
@@ -4330,16 +4350,23 @@ function exportEODPDF(mode){
     tr:nth-child(even) td{background:#f8fafc;}
     b{color:#1a3a6b;}
     button{display:none!important;}
-    @media print{button{display:none!important;} body{padding:12px;}}
-  </style></head><body>${content.innerHTML}</body></html>`;
+    @media print{button{display:none!important;}body{padding:12px;}}
+  </style></head><body>${content.innerHTML}
+  <script>setTimeout(function(){window.print();},400);<\/script>
+  </body></html>`;
 
-  const encoded='data:text/html;charset=utf-8,'+encodeURIComponent(html);
-  const a=document.createElement('a');
-  a.href=encoded;
-  a.download=`px-eod-${isClient?'client':'internal'}-${today}.html`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  const win=window.open('about:blank','_blank');
+  if(win){
+    win.document.write(html);
+    win.document.close();
+  } else {
+    // Fallback download if popup blocked
+    const encoded='data:text/html;charset=utf-8,'+encodeURIComponent(html);
+    const a=document.createElement('a');
+    a.href=encoded;
+    a.download=`mischler-muni-eod-${isClient?'client':'internal'}-${today}.html`;
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+  }
 
   if(internalSec)internalSec.style.display='block';
   if(clientSec)clientSec.style.display='none';
