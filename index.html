@@ -278,6 +278,7 @@
   <button class="tab" id="best-ideas-tab" onclick="switchTab('bestideas',this)">⭐ Best Ideas</button>
   <button class="tab" onclick="switchTab('mmd',this)">Update MMD</button>
   <button class="tab" onclick="switchTab('ratings',this)">Ratings</button>
+  <button class="tab" onclick="switchTab('inquiries',this)">📋 Inquiries</button>
 </nav>
 
 <main>
@@ -365,6 +366,16 @@
     <textarea id="narrative-paste" rows="6" placeholder="Paste MOSB narrative email here...&#10;e.g. (64966SKE5) (Aa2/AA) $5mln+ New York City GO 5s 8/2028 were purchased at 2.29% +12bps..." style="width:100%;background:#0a1628;color:#c9d8e8;border:1px solid #1e3a5f;border-radius:6px;padding:10px;font-size:11px;font-family:monospace;box-sizing:border-box;resize:vertical;"></textarea>
     <button onclick="loadNarrativeComps()" style="margin-top:8px;padding:7px 18px;background:#1e3a5f;color:#38bdf8;border:1px solid #38bdf8;border-radius:4px;cursor:pointer;font-size:11px;letter-spacing:1px;">LOAD NARRATIVE</button>
     <div id="narrative-msg" style="font-size:11px;color:#4ade80;margin-top:6px;display:none;"></div>
+
+    <hr class="section-divider">
+    <label class="slabel">PORTABLE COMPS DB — EXPORT / IMPORT</label>
+    <p style="font-size:11px;color:#4a7fa5;margin-bottom:8px;">Export your comps DB to a file, carry it to any machine, and import to restore instantly.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button onclick="exportCompsDB()" style="padding:7px 18px;background:#1e3a5f;color:#4ade80;border:1px solid #4ade80;border-radius:4px;cursor:pointer;font-size:11px;letter-spacing:1px;">⬇ EXPORT COMPS DB</button>
+      <button onclick="document.getElementById('comps-import-file').click()" style="padding:7px 18px;background:#1e3a5f;color:#f59e0b;border:1px solid #f59e0b;border-radius:4px;cursor:pointer;font-size:11px;letter-spacing:1px;">⬆ IMPORT COMPS DB</button>
+      <input type="file" id="comps-import-file" accept=".json" style="display:none;" onchange="importCompsDB(event)">
+    </div>
+    <div id="comps-portable-msg" style="font-size:11px;color:#4ade80;margin-top:6px;display:none;"></div>
 
     <hr class="section-divider">
       <label class="slabel">LOADED TRADE DATABASE</label>
@@ -476,6 +487,16 @@
       <thead><tr><th>ISSUER KEYWORD</th><th>RATING</th><th>FAIR BAND (BPS TO MMD)</th><th></th></tr></thead>
       <tbody id="rating-tbody"></tbody>
     </table>
+  </div>
+
+  <!-- ── INQUIRIES ── -->
+  <div id="tab-inquiries" class="panel">
+    <label class="slabel">CLIENT INQUIRY PROFILES</label>
+    <p style="font-size:11px;color:#4a7fa5;margin-bottom:16px;">Edit criteria for each client. Changes save automatically and persist across sessions.</p>
+    <div id="inquiry-profiles" style="display:flex;flex-direction:column;gap:20px;"></div>
+    <div style="margin-top:16px;display:flex;gap:10px;">
+      <button onclick="addInquiryProfile()" style="padding:7px 18px;background:#1e3a5f;color:#4ade80;border:1px solid #4ade80;border-radius:4px;cursor:pointer;font-size:11px;letter-spacing:1px;">+ ADD PROFILE</button>
+    </div>
   </div>
 
 </main>
@@ -1231,6 +1252,45 @@ function dDrop(e,cb){
 
 function loadEmmaCusip(e){processEmmaCusipFiles(Array.from(e.target.files));e.target.value='';}
 function loadBulkTrades(e){processCompFile(e.target.files[0]);e.target.value='';}
+
+function exportCompsDB(){
+  if(!bulkTrades.length){alert('No comps loaded to export.');return;}
+  const json=JSON.stringify({version:1,exported:new Date().toISOString(),trades:bulkTrades},null,2);
+  const blob=new Blob([json],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`px-comps-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+}
+
+function importCompsDB(e){
+  const file=e.target.files[0];
+  if(!file)return;
+  const msg=document.getElementById('comps-portable-msg');
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const data=JSON.parse(ev.target.result);
+      const trades=data.trades||data; // support both wrapped and raw array
+      if(!Array.isArray(trades))throw new Error('Invalid format');
+      let added=0;
+      for(const t of trades){
+        if(t.cusip&&!bulkTrades.find(x=>x.cusip===t.cusip)){bulkTrades.push(t);added++;}
+      }
+      recalcAll();
+      updateCompSummary();
+      msg.textContent=`✓ Imported ${added} trades (${trades.length} in file)`;
+      msg.style.color='#4ade80';msg.style.display='block';
+      setTimeout(()=>msg.style.display='none',5000);
+    }catch(err){
+      msg.textContent='Import failed — invalid file';
+      msg.style.color='#f87171';msg.style.display='block';
+      setTimeout(()=>msg.style.display='none',4000);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value='';
+}
 
 function loadNarrativeComps(){
   const text=document.getElementById('narrative-paste').value.trim();
@@ -2995,6 +3055,7 @@ function addBonds(parsed){
   }
   // Sort by time descending so newest appear first
   sortCol='time'; sortDir=-1;
+  recalcAll();
   renderTable(); updateStats(); saveBonds();
   setTimeout(()=>{newCusips.clear();updatedCusips.clear();renderTable();},3000);
   return{added,dupes,updated};
@@ -3681,7 +3742,7 @@ function renderBestIdeas(){
       <td><span class="badge pill-cheap">${b.rc?b.rc.label:'—'}</span></td>
       <td><span class="badge pill-cheap">+${b.compDiff} CHEAP</span></td>
       <td>${(()=>{const bv=getBvalSignal(b);if(!bv)return '<span style="color:var(--text-dim)">—</span>';const sign=bv.diff>0?'+':'';return `<span class="badge pill-cheap">${sign}${bv.diff} CHEAP</span>`;})()}</td>
-      <td style="color:#4a7fa5;font-size:10px">${b.compCount} comps</td>
+      <td style="color:#4a7fa5;font-size:10px">${b.compCount>=10?'10+':b.compCount} comps</td>
       <td style="color:#4a7fa5;font-size:11px">${b.issueSize!=null?b.issueSize+'MM':'—'}</td>
       <td class="time-cell">${b.time||'—'}</td>
     </tr>`;
@@ -3691,6 +3752,223 @@ function renderBestIdeas(){
     <thead><tr>
       <th>CUSIP</th><th>ISSUER</th><th>SZ</th><th>RTG</th><th>CPN</th>
       <th>MAT</th><th>CALL</th><th>YTW</th><th>SPRD</th><th>BAND R/C</th><th>COMP R/C</th><th>BVAL R/C</th><th>COMPS</th><th>ISS SZ</th><th>TIME</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INQUIRY PROFILES
+// ─────────────────────────────────────────────────────────────────────────────
+const DEFAULT_PROFILES=[
+  {
+    id:'justin',name:'Justin',
+    minYield:4.50,minCpn:5.0,maxCpn:null,
+    minRating:'Baa3',excludeStates:[],
+    minMat:null,maxMat:2050,
+    minCall:null,maxCall:null,
+    minDuration:null,maxDuration:3,
+    excludeSectors:['housing','taxable'],
+    notes:'~75% HG / ~25% HY. HG: eff duration max 3yr. Aa ideal. Essential service or strong GO. National buyer appeal. No taxables.'
+  },
+  {
+    id:'tim1',name:'Tim ONE',
+    minYield:4.30,minCpn:4.0,maxCpn:4.50,
+    minRating:'A3',excludeStates:['IL','CA','WA','OR'],
+    minMat:2038,maxMat:2049,
+    minCall:2030,maxCall:2036,
+    minDuration:null,maxDuration:null,
+    excludeSectors:['housing','hospital','taxable','airportAMT'],
+    notes:'Size 750k+. Tax-exempt only. No IL/CA/WA/OR. No Housing, Hospital, AMT.'
+  },
+  {
+    id:'tim2',name:'Tim TWO',
+    minYield:4.45,minCpn:5.0,maxCpn:null,
+    minRating:'A3',excludeStates:[],
+    minMat:2045,maxMat:2055,
+    minCall:2033,maxCall:null,
+    minDuration:null,maxDuration:null,
+    excludeSectors:['housing','taxable','airportAMT'],
+    notes:'Size 1MM+. 5%+ coupon. No Housing, AMT. Call 2033+.'
+  }
+];
+
+let inquiryProfiles=[];
+
+function loadInquiryProfiles(){
+  try{
+    const saved=localStorage.getItem('px-inquiry-profiles');
+    if(saved)inquiryProfiles=JSON.parse(saved);
+    else inquiryProfiles=JSON.parse(JSON.stringify(DEFAULT_PROFILES));
+  }catch(e){inquiryProfiles=JSON.parse(JSON.stringify(DEFAULT_PROFILES));}
+}
+
+function saveInquiryProfiles(){
+  try{localStorage.setItem('px-inquiry-profiles',JSON.stringify(inquiryProfiles));}catch(e){}
+}
+
+function addInquiryProfile(){
+  const id='profile_'+Date.now();
+  inquiryProfiles.push({id,name:'New Profile',minYield:4.0,minCpn:4.0,maxCpn:null,minRating:'A',excludeStates:[],minMat:2030,maxMat:2055,minCall:null,maxCall:null,excludeSectors:[],notes:''});
+  saveInquiryProfiles();
+  renderInquiryProfiles();
+}
+
+function deleteInquiryProfile(id){
+  if(!confirm('Delete this profile?'))return;
+  inquiryProfiles=inquiryProfiles.filter(p=>p.id!==id);
+  saveInquiryProfiles();
+  renderInquiryProfiles();
+}
+
+function resetInquiryProfiles(){
+  if(!confirm('Reset all profiles to defaults?'))return;
+  inquiryProfiles=JSON.parse(JSON.stringify(DEFAULT_PROFILES));
+  saveInquiryProfiles();
+  renderInquiryProfiles();
+}
+
+function updateProfile(id,field,value){
+  const p=inquiryProfiles.find(x=>x.id===id);
+  if(!p)return;
+  if(field==='excludeStates'||field==='excludeSectors'){
+    p[field]=value.split(',').map(s=>s.trim()).filter(Boolean);
+  } else if(['minYield','maxYield','minCpn','maxCpn','minMat','maxMat','minCall','maxCall','minDuration','maxDuration'].includes(field)){
+    p[field]=value===''?null:parseFloat(value);
+  } else {
+    p[field]=value;
+  }
+  saveInquiryProfiles();
+}
+
+function renderInquiryProfiles(){
+  const container=document.getElementById('inquiry-profiles');
+  if(!container)return;
+  const SECTORS=['go','water','hospital','univ','housing','toll','salesTax','cops','airportAMT','airportNonAMT','gasPrepay','taxable'];
+  container.innerHTML=inquiryProfiles.map(p=>`
+    <div style="background:#0d1f3c;border:1px solid #1e3a5f;border-radius:8px;padding:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <input value="${p.name}" onchange="updateProfile('${p.id}','name',this.value)" style="font-size:14px;font-weight:700;color:#38bdf8;background:transparent;border:none;border-bottom:1px solid #1e3a5f;width:200px;padding-bottom:2px;">
+        <button onclick="deleteInquiryProfile('${p.id}')" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:12px;">✕ DELETE</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:10px;">
+        <div><label class="slabel" style="font-size:9px;">MIN YIELD %</label>
+          <input type="number" step="0.01" value="${p.minYield??''}" onchange="updateProfile('${p.id}','minYield',this.value)" style="width:100%;"></div>
+        <div><label class="slabel" style="font-size:9px;">MIN CPN %</label>
+          <input type="number" step="0.01" value="${p.minCpn??''}" onchange="updateProfile('${p.id}','minCpn',this.value)" style="width:100%;"></div>
+        <div><label class="slabel" style="font-size:9px;">MAX CPN %</label>
+          <input type="number" step="0.01" value="${p.maxCpn??''}" placeholder="none" onchange="updateProfile('${p.id}','maxCpn',this.value)" style="width:100%;"></div>
+        <div><label class="slabel" style="font-size:9px;">MIN RATING</label>
+          <select onchange="updateProfile('${p.id}','minRating',this.value)" style="width:100%;">
+            ${['Aaa','Aa1','Aa2','Aa3','A1','A2','A3','Baa1','Baa2','Baa3','NR'].map(r=>`<option${p.minRating===r?' selected':''}>${r}</option>`).join('')}
+          </select></div>
+        <div><label class="slabel" style="font-size:9px;">MIN MAT YEAR</label>
+          <input type="number" value="${p.minMat??''}" placeholder="none" onchange="updateProfile('${p.id}','minMat',this.value)" style="width:100%;"></div>
+        <div><label class="slabel" style="font-size:9px;">MAX MAT YEAR</label>
+          <input type="number" value="${p.maxMat??''}" placeholder="none" onchange="updateProfile('${p.id}','maxMat',this.value)" style="width:100%;"></div>
+        <div><label class="slabel" style="font-size:9px;">MIN CALL YEAR</label>
+          <input type="number" value="${p.minCall??''}" placeholder="none" onchange="updateProfile('${p.id}','minCall',this.value)" style="width:100%;"></div>
+        <div><label class="slabel" style="font-size:9px;">MAX CALL YEAR</label>
+          <input type="number" value="${p.maxCall??''}" placeholder="none" onchange="updateProfile('${p.id}','maxCall',this.value)" style="width:100%;"></div>
+        <div><label class="slabel" style="font-size:9px;">MIN EFF DURATION (YR)</label>
+          <input type="number" step="0.5" value="${p.minDuration??''}" placeholder="none" onchange="updateProfile('${p.id}','minDuration',this.value)" style="width:100%;"></div>
+        <div><label class="slabel" style="font-size:9px;">MAX EFF DURATION (YR)</label>
+          <input type="number" step="0.5" value="${p.maxDuration??''}" placeholder="none" onchange="updateProfile('${p.id}','maxDuration',this.value)" style="width:100%;"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div><label class="slabel" style="font-size:9px;">EXCLUDE STATES (comma separated)</label>
+          <input value="${(p.excludeStates||[]).join(', ')}" onchange="updateProfile('${p.id}','excludeStates',this.value)" placeholder="e.g. IL, CA, WA" style="width:100%;"></div>
+        <div><label class="slabel" style="font-size:9px;">EXCLUDE SECTORS (comma separated)</label>
+          <input value="${(p.excludeSectors||[]).join(', ')}" onchange="updateProfile('${p.id}','excludeSectors',this.value)" placeholder="e.g. housing, hospital, taxable" style="width:100%;"></div>
+      </div>
+      <div><label class="slabel" style="font-size:9px;">NOTES</label>
+        <textarea onchange="updateProfile('${p.id}','notes',this.value)" style="width:100%;height:48px;background:#0a1628;color:#c9d8e8;border:1px solid #1e3a5f;border-radius:4px;padding:6px;font-size:10px;box-sizing:border-box;resize:none;">${p.notes||''}</textarea></div>
+      <div style="margin-top:8px;">
+        <button onclick="screenProfile('${p.id}')" style="padding:6px 16px;background:#1e3a5f;color:#4ade80;border:1px solid #4ade80;border-radius:4px;cursor:pointer;font-size:10px;letter-spacing:1px;">▶ SCREEN NOW</button>
+        <button onclick="clearScreen()" style="padding:6px 16px;background:#1e3a5f;color:#f87171;border:1px solid #f87171;border-radius:4px;cursor:pointer;font-size:10px;letter-spacing:1px;margin-left:6px;">✕ CLEAR</button>
+        <span id="screen-msg-${p.id}" style="font-size:10px;color:#4a7fa5;margin-left:10px;"></span>
+      </div>
+      <div id="screen-results-${p.id}"></div>
+      </div>
+    </div>
+  `).join('');
+
+  // Add reset button at bottom
+  const resetBtn=document.createElement('button');
+  resetBtn.textContent='↺ RESET TO DEFAULTS';
+  resetBtn.onclick=resetInquiryProfiles;
+  resetBtn.style.cssText='padding:6px 14px;background:none;color:#4a7fa5;border:1px solid #1e3a5f;border-radius:4px;cursor:pointer;font-size:10px;margin-top:4px;';
+  container.appendChild(resetBtn);
+}
+
+const RATING_ORDER=['Aaa','Aa1','Aa2','Aa3','A1','A2','A3','Baa1','Baa2','Baa3','Ba1','Ba2','Ba3','B1','B2','B3','AAA','AA+','AA','AA-','A+','A','A-','BBB+','BBB','BBB-','BB+','BB','BB-','B+','B','B-','NR'];
+function ratingMeetsMin(rating,minRating){
+  if(!minRating||minRating==='NR')return true;
+  if(!rating)return false;
+  const r=rating.split('/')[0].trim();
+  const ri=RATING_ORDER.indexOf(r);
+  const mi=RATING_ORDER.indexOf(minRating);
+  if(ri<0||mi<0)return false;
+  return ri<=mi;
+}
+
+function clearScreen(){
+  document.querySelectorAll('[id^="screen-results-"]').forEach(el=>el.innerHTML='');
+  document.querySelectorAll('[id^="screen-msg-"]').forEach(el=>el.textContent='');
+}
+
+function screenProfile(id){
+  const p=inquiryProfiles.find(x=>x.id===id);
+  if(!p){return;}
+  const msg=document.getElementById(`screen-msg-${id}`);
+  const resultsEl=document.getElementById(`screen-results-${id}`);
+  if(!bonds.length){if(msg)msg.textContent='No bonds loaded.';return;}
+  const curYear=new Date().getFullYear();
+  const matches=bonds.filter(b=>{
+    if(p.minYield!=null&&(b.ytw==null||b.ytw<p.minYield))return false;
+    if(p.minCpn!=null&&(b.cpn==null||b.cpn<p.minCpn))return false;
+    if(p.maxCpn!=null&&(b.cpn==null||b.cpn>p.maxCpn))return false;
+    if(p.minMat!=null&&(b.matYear==null||b.matYear<p.minMat))return false;
+    if(p.maxMat!=null&&(b.matYear==null||b.matYear>p.maxMat))return false;
+    if(p.minCall!=null&&(b.callYear==null||b.callYear<p.minCall))return false;
+    if(p.maxCall!=null&&(b.callYear==null||b.callYear>p.maxCall))return false;
+    if(p.minRating&&!ratingMeetsMin(b.rating,p.minRating))return false;
+    if(p.excludeStates&&p.excludeStates.length&&b.state&&p.excludeStates.includes(b.state.toUpperCase()))return false;
+    if(p.excludeSectors&&p.excludeSectors.length&&b.sectorKey&&p.excludeSectors.includes(b.sectorKey))return false;
+    if(p.excludeSectors&&p.excludeSectors.includes('taxable')&&b.taxable)return false;
+    if(p.minDuration!=null||p.maxDuration!=null){
+      const effDur=(b.callYear||b.matYear||curYear)-curYear;
+      if(p.minDuration!=null&&effDur<p.minDuration)return false;
+      if(p.maxDuration!=null&&effDur>p.maxDuration)return false;
+    }
+    return true;
+  });
+  if(msg)msg.textContent=`${matches.length} match${matches.length!==1?'es':''}`;
+  if(!resultsEl)return;
+  if(!matches.length){resultsEl.innerHTML='<div style="color:#4a7fa5;font-size:11px;margin-top:8px;">No matches.</div>';return;}
+  const rows=matches.map(b=>{
+    const spreadClass=b.spread>0?'spread-pos':'spread-neg';
+    const bv=getBvalSignal(b);
+    const bvCell=bv?`<span class="badge pill-cheap">+${bv.diff} CHEAP</span>`:'—';
+    return`<tr>
+      <td class="cusip">${b.cusip}</td>
+      <td class="issuer-cell" title="${b.issuer||''}">${b.issuer||'—'}</td>
+      <td style="color:#4a7fa5">${b.size!=null?Math.round(b.size*1000).toLocaleString():'—'}</td>
+      <td style="color:#38bdf8;font-weight:700">${b.rating||'NR'}</td>
+      <td>${b.cpn!=null?b.cpn.toFixed(3):'—'}</td>
+      <td>${b.matYear||'—'}</td>
+      <td>${b.callYear||'NC'}</td>
+      <td style="font-weight:700">${b.ytw!=null?b.ytw.toFixed(2)+'%':'—'}</td>
+      <td class="${spreadClass}">${b.spread!=null?(b.spread>0?'+':'')+b.spread:'—'}</td>
+      <td>${b.rc?.cls?`<span class="badge ${b.rc.cls}">${b.rc.label}</span>`:'—'}</td>
+      <td>${bvCell}</td>
+      <td style="color:#4a7fa5;font-size:10px">${b.time||'—'}</td>
+    </tr>`;
+  }).join('');
+  resultsEl.innerHTML=`<table style="margin-top:10px;">
+    <thead><tr>
+      <th>CUSIP</th><th>ISSUER</th><th>SZ</th><th>RTG</th><th>CPN</th>
+      <th>MAT</th><th>CALL</th><th>YTW</th><th>SPRD</th><th>BAND R/C</th><th>BVAL R/C</th><th>TIME</th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
@@ -3712,6 +3990,8 @@ renderMMDGrid();
 renderRatingTable();
 loadCusipRatingCache();
 loadBonds();
+loadInquiryProfiles();
+renderInquiryProfiles();
 </script>
 </body>
 </html>
