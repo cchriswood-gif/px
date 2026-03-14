@@ -3971,7 +3971,42 @@ function screenProfile(id){
       <th>MAT</th><th>CALL</th><th>YTW</th><th>SPRD</th><th>BAND R/C</th><th>BVAL R/C</th><th>TIME</th>
     </tr></thead>
     <tbody>${rows}</tbody>
-  </table>`;
+  </table>
+  <button onclick="exportInquiryCSV('${id}')" style="margin-top:10px;padding:6px 16px;background:#1e3a5f;color:#38bdf8;border:1px solid #38bdf8;border-radius:4px;cursor:pointer;font-size:10px;letter-spacing:1px;">⬇ EXPORT CSV</button>`;
+
+  // Store matches for CSV export
+  resultsEl._matches=matches;
+}
+
+function exportInquiryCSV(id){
+  const resultsEl=document.getElementById(`screen-results-${id}`);
+  const matches=resultsEl?._matches;
+  if(!matches||!matches.length){alert('No results to export.');return;}
+  const p=inquiryProfiles.find(x=>x.id===id);
+  const headers=['CUSIP','ISSUER','SIZE','RATING','CPN','MAT','CALL','YTW','SPREAD','BAND R/C','BVAL R/C','TIME'];
+  const rows=matches.map(b=>{
+    const bv=getBvalSignal(b);
+    return[
+      b.cusip||'',
+      (b.issuer||'').replace(/,/g,' '),
+      b.size!=null?Math.round(b.size*1000):'',
+      b.rating||'NR',
+      b.cpn!=null?b.cpn.toFixed(3):'',
+      b.matYear||'',
+      b.callYear||'NC',
+      b.ytw!=null?b.ytw.toFixed(2):'',
+      b.spread!=null?(b.spread>0?'+':'')+b.spread:'',
+      b.rc?.label||'',
+      bv?`+${bv.diff} CHEAP`:'',
+      b.time||''
+    ].join(',');
+  });
+  const csv=[headers.join(','),...rows].join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`${(p?.name||id).replace(/\s+/g,'-')}-screen-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
 }
 
 function switchTab(id,el){
