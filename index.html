@@ -460,6 +460,16 @@
     <hr class="section-divider" style="margin:16px 0;">
     <label class="slabel" style="margin-top:8px;">CURRENT CURVE — <span id="mmd-curve-date">3/3/26</span></label>
     <div class="mmd-grid" id="mmd-grid"></div>
+
+    <hr class="section-divider" style="margin:16px 0;">
+    <label class="slabel">FULL SNAPSHOT — EXPORT / IMPORT</label>
+    <p style="font-size:11px;color:#4a7fa5;margin-bottom:8px;">Saves everything: bonds, comps DB, MMD curve, BVAL curves, ratings, rating cache, inquiry profiles. Use to move your full workspace between machines.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button onclick="exportSnapshot()" style="padding:7px 18px;background:#1e3a5f;color:#4ade80;border:1px solid #4ade80;border-radius:4px;cursor:pointer;font-size:11px;letter-spacing:1px;">⬇ EXPORT FULL SNAPSHOT</button>
+      <button onclick="document.getElementById('snapshot-import-file').click()" style="padding:7px 18px;background:#1e3a5f;color:#f59e0b;border:1px solid #f59e0b;border-radius:4px;cursor:pointer;font-size:11px;letter-spacing:1px;">⬆ IMPORT FULL SNAPSHOT</button>
+      <input type="file" id="snapshot-import-file" accept=".json" style="display:none;" onchange="importSnapshot(event)">
+    </div>
+    <div id="snapshot-msg" style="font-size:11px;color:#4ade80;margin-top:6px;display:none;"></div>
   </div>
 
   <!-- ── RATINGS ── -->
@@ -1252,6 +1262,60 @@ function dDrop(e,cb){
 
 function loadEmmaCusip(e){processEmmaCusipFiles(Array.from(e.target.files));e.target.value='';}
 function loadBulkTrades(e){processCompFile(e.target.files[0]);e.target.value='';}
+
+function exportSnapshot(){
+  const snapshot={
+    version:2,
+    exported:new Date().toISOString(),
+    bonds,
+    bulkTrades,
+    mmd,
+    mmdDate,
+    bvalCurves,
+    bvalDate,
+    cusipRatingCache,
+    issuerRatings,
+    inquiryProfiles
+  };
+  const json=JSON.stringify(snapshot,null,2);
+  const blob=new Blob([json],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`px-snapshot-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+}
+
+function importSnapshot(e){
+  const file=e.target.files[0];
+  if(!file)return;
+  const msg=document.getElementById('snapshot-msg');
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const d=JSON.parse(ev.target.result);
+      if(!d.version)throw new Error('Invalid snapshot');
+      if(d.bonds){bonds=d.bonds;localStorage.setItem('px-bonds',JSON.stringify(bonds));}
+      if(d.bulkTrades){bulkTrades=d.bulkTrades;}
+      if(d.mmd){Object.assign(mmd,d.mmd);renderMMDGrid();}
+      if(d.mmdDate){mmdDate=d.mmdDate;}
+      if(d.bvalCurves){bvalCurves=d.bvalCurves;bvalDate=d.bvalDate||null;}
+      if(d.cusipRatingCache){Object.assign(cusipRatingCache,d.cusipRatingCache);localStorage.setItem('px-cusip-ratings',JSON.stringify(cusipRatingCache));}
+      if(d.issuerRatings&&d.issuerRatings.length){issuerRatings=d.issuerRatings;localStorage.setItem('projectx-ratings',JSON.stringify(issuerRatings));renderRatingTable();}
+      if(d.inquiryProfiles){inquiryProfiles=d.inquiryProfiles;saveInquiryProfiles();renderInquiryProfiles();}
+      recalcAll();
+      updateCompSummary();
+      msg.textContent=`✓ Snapshot loaded — ${bonds.length} bonds, ${bulkTrades.length} comps, ${Object.keys(cusipRatingCache).length} ratings`;
+      msg.style.color='#4ade80';msg.style.display='block';
+      setTimeout(()=>msg.style.display='none',6000);
+    }catch(err){
+      msg.textContent='Import failed — invalid snapshot file';
+      msg.style.color='#f87171';msg.style.display='block';
+      setTimeout(()=>msg.style.display='none',4000);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value='';
+}
 
 function exportCompsDB(){
   if(!bulkTrades.length){alert('No comps loaded to export.');return;}
@@ -3056,7 +3120,6 @@ function addBonds(parsed){
   // Sort by time descending so newest appear first
   sortCol='time'; sortDir=-1;
   recalcAll();
-  renderTable(); updateStats(); saveBonds();
   setTimeout(()=>{newCusips.clear();updatedCusips.clear();renderTable();},3000);
   return{added,dupes,updated};
 }
