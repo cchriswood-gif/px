@@ -3449,12 +3449,27 @@ function updateStats(){
   const rich=bonds.filter(b=>b.rc&&b.rc.label==="RICH").length;
   const fair=bonds.filter(b=>b.rc&&b.rc.label==="FAIR").length;
   const avg=Math.round(ws.reduce((a,b)=>a+b.spread,0)/ws.length);
+  const rated=bonds.filter(b=>b.rc&&(b.rc.label==="CHEAP"||b.rc.label==="RICH"||b.rc.label==="FAIR")).length;
+
+  // Sentiment gauge — based on cheap/rich ratio
+  let sentLabel,sentColor,sentDesc;
+  if(rated>=5){
+    const cheapPct=cheap/rated;
+    const richPct=rich/rated;
+    if(cheapPct>=0.70){sentLabel='🟢 BUY';sentColor='#4ade80';sentDesc='Market oversold — herd selling';}
+    else if(richPct>=0.70){sentLabel='🔴 SELL';sentColor='#f87171';sentDesc='Market overbought — herd buying';}
+    else{sentLabel='⚪ NEUTRAL';sentColor='#94a3b8';sentDesc='Market balanced';}
+  } else {
+    sentLabel='— N/A';sentColor='#4a7fa5';sentDesc='Need more bonds';
+  }
+
   document.getElementById("stats-bar").innerHTML=`
     <div class="stat"><span class="stat-val" style="color:#4ade80">${cheap}</span><span class="stat-lbl">CHEAP</span></div>
     <div class="stat"><span class="stat-val" style="color:#fbbf24">${fair}</span><span class="stat-lbl">FAIR</span></div>
     <div class="stat"><span class="stat-val" style="color:#f87171">${rich}</span><span class="stat-lbl">RICH</span></div>
     <div class="stat"><span class="stat-val">${bonds.length}</span><span class="stat-lbl">TOTAL</span></div>
     <div class="stat"><span class="stat-val">${avg>0?"+":""}${avg}</span><span class="stat-lbl">AVG SPRD</span></div>
+    <div class="stat" title="${sentDesc}" style="cursor:help;"><span class="stat-val" style="color:${sentColor};font-size:13px;">${sentLabel}</span><span class="stat-lbl">SENTIMENT</span></div>
     <div class="stat"><span class="stat-val" style="color:#a78bfa">${Object.keys(emmaHistory).length}</span><span class="stat-lbl">EMMA</span></div>
     <div class="stat"><span class="stat-val" style="color:#f59e0b">${bulkTrades.length?bulkTrades.length.toLocaleString():'0'}</span><span class="stat-lbl">COMPS DB</span></div>
     <div class="stat"><span class="stat-val" style="color:#a78bfa">${Object.keys(cusipRatingCache).length.toLocaleString()}</span><span class="stat-lbl">RTG CACHE</span></div>
