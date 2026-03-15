@@ -843,6 +843,19 @@ function getBvalCurveKey(sector, rating) {
     const k = `${sp}_${fb}`;
     if(bvalCurves[k]) return k;
   }
+  // Cross-sector fallbacks when no curve exists for this sector
+  const crossFallback={
+    'univ': ['go_AA','go_AAp','go_AA'],   // Higher Ed → GO AA proxy
+    'hosp': ['go_A','go_Ap','go_Am'],     // Hospital → GO A proxy
+    'toll': ['go_AA','go_AAp'],           // Transport → GO AA proxy
+    'rev':  ['go_AA','go_A'],             // Revenue → GO AA proxy
+    'airport':['go_A','go_AA'],           // Airport NonAMT → GO A proxy
+  };
+  if(crossFallback[sp]){
+    for(const k of crossFallback[sp]){
+      if(bvalCurves[k]) return k;
+    }
+  }
   return null;
 }
 
