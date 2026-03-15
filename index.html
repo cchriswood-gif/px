@@ -278,6 +278,7 @@
   <button class="tab" id="best-ideas-tab" onclick="switchTab('bestideas',this)">⭐ Best Ideas</button>
   <button class="tab" onclick="switchTab('mmd',this)">Update MMD</button>
   <button class="tab" onclick="switchTab('ratings',this)">Ratings</button>
+  <button class="tab" onclick="switchTab('sectors',this)">📊 Sectors</button>
   <button class="tab" onclick="switchTab('inquiries',this)">📋 Inquiries</button>
 </nav>
 
@@ -444,6 +445,15 @@
     <div class="btn-row"><button class="btn-primary" onclick="applyMMD()">APPLY</button></div>
     <div id="mmd-confirm" style="display:none;color:#4ade80;font-size:11px;margin-top:6px;"></div>
     <hr class="section-divider" style="margin:16px 0;">
+    <label class="slabel">PASTE BQNT MUNI SCALE (AAA/AA/A/BAA GO)</label>
+    <p style="font-size:11px;color:#4a7fa5;margin-bottom:8px;">Paste the full BQNT muni scale table — updates MMD curve (AAA column) AND GO sector BVAL bands by rating tier in one shot.</p>
+    <textarea id="scale-paste" rows="8" placeholder="Mat. Year  AAA GO TE YTW  CHG  AAA PRE-RE TE  CHG  VS MMD  INSURED YTW  CHG  VS MMD  AA GO TE YTW  CHG  VS MMD  A GO TE YTW  CHG  VS MMD  BAA GO TE YTW  CHG  VS MMD&#10;1  2027  2.14  0.02  2.19  0.02  5  2.20  0.02  6  2.17  0.02  3  2.18  0.02  4  2.56  0.02  42"></textarea>
+    <div class="btn-row" style="margin-top:8px;">
+      <button class="btn-primary" onclick="applyBqntScale()">APPLY SCALE</button>
+      <button class="btn-secondary" onclick="document.getElementById('scale-paste').value=''">CLEAR</button>
+    </div>
+    <div id="scale-msg" style="font-size:11px;color:#4ade80;margin-top:6px;display:none;"></div>
+    <hr class="section-divider" style="margin:16px 0;">
     <label class="slabel">UPDATE TREASURY CURVE</label>
     <p style="font-size:11px;color:#4a7fa5;margin-bottom:8px;">Paste Bloomberg govie screen (GBBT&lt;GO&gt; or IYC) — auto-extracts yields.</p>
     <textarea id="tsy-paste" rows="6" placeholder="Paste Bloomberg treasury screen here..."></textarea>
@@ -456,7 +466,7 @@
     <hr class="section-divider" style="margin:16px 0;">
     <label class="slabel">UPDATE BVAL SECTOR CURVES</label>
     <p style="font-size:11px;color:#4a7fa5;margin-bottom:8px;">Paste output from BQNT sector curve script. Updates live BVAL fair value for R/C third signal.</p>
-    <textarea id="bval-paste" rows="8" placeholder="=== BVAL SECTOR CURVES ===&#10;Date: 03/11/26&#10;go_AA: 1:2.118,2:2.119,3:2.126...&#10;hosp_AA: 1:2.45,2:2.46...&#10;=== END ==="></textarea>
+    <textarea id="bval-paste" rows="8" placeholder="Paste Bloomberg BVAL screen output — one sector per line:&#10;GO — AA	BVSC1212 Index	1y 2.380		3y 2.431		5y 2.580		7y 2.780		10y 3.092		20y 4.280		30y 4.590&#10;GO — A	BVSC1213 Index	1y 2.545		3y 2.592		5y 2.763 ...&#10;Hospital — A	BVSC1339 Index	1y 2.600 ...&#10;Water — AA	BVSC1287 Index	1y 2.776 ...&#10;&#10;Also accepts original format: go_AA: 1:2.118,2:2.119..."></textarea>
     <div class="btn-row" style="margin-top:8px;">
       <button class="btn-primary" onclick="applyBval()">APPLY BVAL</button>
       <button class="btn-secondary" onclick="document.getElementById('bval-paste').value=''">CLEAR</button>
@@ -503,6 +513,13 @@
       <thead><tr><th>ISSUER KEYWORD</th><th>RATING</th><th>FAIR BAND (BPS TO MMD)</th><th></th></tr></thead>
       <tbody id="rating-tbody"></tbody>
     </table>
+  </div>
+
+  <!-- ── SECTOR SPREADS ── -->
+  <div id="tab-sectors" class="panel">
+    <label class="slabel">SECTOR SPREAD MATRIX — LIVE FROM COMPS DB</label>
+    <p style="font-size:11px;color:#4a7fa5;margin-bottom:14px;">Average spread to MMD by sector, rating tier, and maturity bucket. Built from your MOSB comps DB. Min 3 trades to show a cell.</p>
+    <div id="sector-matrix"></div>
   </div>
 
   <!-- ── INQUIRIES ── -->
@@ -855,16 +872,132 @@ function interpolateBval(curveKey, matYear) {
   return interpolateBvalSingle(curveKey, matYear);
 }
 
+function applyBqntScale(){
+  const text=document.getElementById('scale-paste').value.trim();
+  const msg=document.getElementById('scale-msg');
+  if(!text){msg.textContent='Nothing to parse';msg.style.color='#f87171';msg.style.display='block';setTimeout(()=>msg.style.display='none',3000);return;}
+
+  // Parse tab or multi-space delimited rows
+  // Expected cols (0-indexed): 0=tenor, 1=year, 2=AAA_YTW, 3=CHG, 4=PRERE_YTW, 5=CHG, 6=PRERE_VS_MMD,
+  // 7=INS_YTW, 8=CHG, 9=INS_VS_MMD, 10=AA_YTW, 11=CHG, 12=AA_VS_MMD,
+  // 13=A_YTW, 14=CHG, 15=A_VS_MMD, 16=BAA_YTW, 17=CHG, 18=BAA_VS_MMD
+  const lines=text.split('\n').map(l=>l.trim()).filter(l=>/^\d/.test(l));
+  if(!lines.length){msg.textContent='No data rows found';msg.style.color='#f87171';msg.style.display='block';setTimeout(()=>msg.style.display='none',3000);return;}
+
+  let mmdCount=0, goAAA={}, goAA={}, goA={}, goBAA={};
+
+  for(const line of lines){
+    const cols=line.split(/\t|\s{2,}|\s+/).filter(Boolean);
+    if(cols.length<3)continue;
+    const tenor=parseInt(cols[0]);
+    const year=parseInt(cols[1]);
+    if(!year||year<2026||year>2060)continue;
+
+    const aaaYtw=parseFloat(cols[2]);
+    if(!isNaN(aaaYtw)&&aaaYtw>1&&aaaYtw<8){mmd[year]=aaaYtw;goAAA[tenor]=aaaYtw;mmdCount++;}
+
+    // AA GO: col 10
+    if(cols.length>10){const v=parseFloat(cols[10]);if(!isNaN(v)&&v>1&&v<8)goAA[tenor]=v;}
+    // A GO: col 13
+    if(cols.length>13){const v=parseFloat(cols[13]);if(!isNaN(v)&&v>1&&v<10)goA[tenor]=v;}
+    // BAA GO: col 16
+    if(cols.length>16){const v=parseFloat(cols[16]);if(!isNaN(v)&&v>1&&v<12)goBAA[tenor]=v;}
+  }
+
+  if(!mmdCount){msg.textContent='Could not parse — check format';msg.style.color='#f87171';msg.style.display='block';setTimeout(()=>msg.style.display='none',4000);return;}
+
+  // Update MMD curve
+  renderMMDGrid();
+
+  // Build BVAL GO curves from parsed yields
+  // Keys: go_AAA, go_AAp, go_AA, go_AAm, go_Ap, go_A, go_Am, go_BBB
+  if(Object.keys(goAAA).length)bvalCurves['go_AAA']=goAAA;
+  if(Object.keys(goAA).length){
+    bvalCurves['go_AAp']=goAA;  // AA+ proxy
+    bvalCurves['go_AA']=goAA;
+    bvalCurves['go_AAm']=goAA;  // AA- proxy
+  }
+  if(Object.keys(goA).length){
+    bvalCurves['go_Ap']=goA;
+    bvalCurves['go_A']=goA;
+    bvalCurves['go_Am']=goA;
+  }
+  if(Object.keys(goBAA).length){
+    bvalCurves['go_BBBp']=goBAA;
+    bvalCurves['go_BBB']=goBAA;
+    bvalCurves['go_BBBm']=goBAA;
+  }
+
+  // Save
+  localStorage.setItem('projectx-bval',JSON.stringify({curves:bvalCurves,date:bvalDate}));
+  recalcAll();
+  updateStats();
+
+  const goCount=[goAAA,goAA,goA,goBAA].filter(o=>Object.keys(o).length>0).length;
+  msg.textContent=`✓ Scale loaded — ${mmdCount} MMD tenors + ${goCount} GO rating tiers`;
+  msg.style.color='#4ade80';msg.style.display='block';
+  setTimeout(()=>msg.style.display='none',5000);
+  document.getElementById('scale-paste').value='';
+}
+
 function applyBval() {
   const text = document.getElementById('bval-paste').value.trim();
   if(!text) return;
   const lines = text.split('\n');
   const parsed = {};
   let date = null;
+
+  // Sector name → Project X curve key mapping
+  const SECTOR_MAP={
+    'GO — AA':'go_AA','GO—AA':'go_AA','GO AA':'go_AA','GOAA':'go_AA',
+    'GO — A':'go_A','GO—A':'go_A','GO A':'go_A','GOA':'go_A',
+    'HOSPITAL — A':'hosp_A','HOSPITAL—A':'hosp_A','HOSPITAL A':'hosp_A',
+    'WATER — AA':'water_AA','WATER—AA':'water_AA','WATER AA':'water_AA',
+    'HIGHER ED — AA':'univ_AA','HIGHER ED—AA':'univ_AA','HIGHER ED AA':'univ_AA',
+    'HIGHERED — AA':'univ_AA','UNIV AA':'univ_AA',
+  };
+
   for(const line of lines) {
     const trimmed = line.trim();
+    if(!trimmed) continue;
     if(trimmed.startsWith('Date:')) { date = trimmed.replace('Date:','').trim(); continue; }
     if(trimmed.startsWith('===')) continue;
+
+    // Try Bloomberg screen format: "GO — AA\tBVSC1212 Index\t1y 2.380\t\t3y 2.431..."
+    const tabs=trimmed.split('\t').map(s=>s.trim()).filter(s=>s);
+    if(tabs.length>=2){
+      // Find sector key from first column
+      const sectorRaw=tabs[0].toUpperCase();
+      const curveKey=SECTOR_MAP[sectorRaw]||null;
+      if(curveKey){
+        // Skip "Data Unavailable"
+        if(trimmed.toUpperCase().includes('DATA UNAVAILABLE')){
+          console.log(`BVAL skip (no data): ${tabs[0]}`);
+          continue;
+        }
+        // Parse tenor/rate pairs: "1y 2.380" "3y 2.431" etc
+        const curve={};
+        const tenorRe=/(\d+)y\s+([\d.]+)/gi;
+        let m;
+        while((m=tenorRe.exec(trimmed))!==null){
+          const tenor=parseInt(m[1]);
+          const rate=parseFloat(m[2]);
+          if(tenor>=1&&tenor<=30&&rate>0&&rate<10) curve[tenor]=rate;
+        }
+        if(Object.keys(curve).length){
+          parsed[curveKey]=curve;
+          // Also populate adjacent rating tiers for fallback
+          if(curveKey==='go_AA'){parsed['go_AAp']=curve;parsed['go_AAm']=curve;}
+          if(curveKey==='go_A'){parsed['go_Ap']=curve;parsed['go_Am']=curve;}
+          if(curveKey==='hosp_A'){parsed['hosp_Ap']=curve;parsed['hosp_Am']=curve;}
+          if(curveKey==='water_AA'){parsed['water_AAp']=curve;parsed['water_AAm']=curve;}
+          if(curveKey==='univ_AA'){parsed['univ_AAp']=curve;parsed['univ_AAm']=curve;}
+        }
+        continue;
+      }
+    }
+
+    // Original format: "go_AA: 1:2.118,2:2.119..."
     const colon = trimmed.indexOf(':');
     if(colon < 0) continue;
     const key = trimmed.slice(0,colon).trim();
@@ -876,15 +1009,18 @@ function applyBval() {
     }
     if(Object.keys(curve).length) parsed[key] = curve;
   }
+
   if(!Object.keys(parsed).length) {
     const msg = document.getElementById('bval-msg');
-    msg.textContent = '⚠ No valid curves parsed'; msg.style.color='var(--accent-red)'; msg.style.display='block';
+    msg.textContent = '⚠ No valid curves parsed — check format'; msg.style.color='var(--accent-red)'; msg.style.display='block';
+    setTimeout(()=>msg.style.display='none',4000);
     return;
   }
-  bvalCurves = parsed;
-  bvalDate = date;
+
+  // Merge into existing curves (don't wipe hospital if unavailable today)
+  Object.assign(bvalCurves, parsed);
+  if(date) bvalDate=date;
   localStorage.setItem('projectx-bval', JSON.stringify({curves:bvalCurves,date:bvalDate}));
-  // Recompute bvalDiff/bvalLabel on all bonds with new curves
   if(bonds.length){
     bonds=bonds.map(b=>{
       const bv=getBvalSignal(b);
@@ -898,7 +1034,7 @@ function applyBval() {
   msg.style.color='var(--accent-green)'; msg.style.display='block';
   setTimeout(()=>msg.style.display='none', 3000);
   const status = document.getElementById('bval-status');
-  status.textContent = `BVAL curves: ${Object.keys(parsed).join(', ')}`;
+  status.textContent = `BVAL curves loaded: ${Object.keys(parsed).join(', ')}`;
   document.getElementById('bval-paste').value='';
   renderTable();
 }
@@ -4395,12 +4531,152 @@ function exportEODWord(){
   document.body.removeChild(a);
 }
 
+function renderSectorMatrix(){
+  const container=document.getElementById('sector-matrix');
+  if(!container)return;
+  if(!bulkTrades.length){container.innerHTML='<div style="color:#4a7fa5;font-size:11px;">No comps loaded — upload MOSB file or paste narrative first.</div>';return;}
+
+  const curYear=new Date().getFullYear();
+  const BUCKETS=[{label:'1–5yr',min:1,max:5},{label:'5–10yr',min:5,max:10},{label:'10–20yr',min:10,max:20},{label:'20–30yr',min:20,max:30}];
+  const RATING_TIERS={
+    'AAA':['Aaa','AAA'],
+    'AA': ['Aa1','Aa2','Aa3','AA+','AA','AA-'],
+    'A':  ['A1','A2','A3','A+','A','A-'],
+    'BAA':['Baa1','Baa2','Baa3','BBB+','BBB','BBB-']
+  };
+  // Per-tier bands: [min, max] bps to MMD. Based on BQNT scale VS MMD spreads.
+  const TIER_BANDS={
+    go:      {AAA:[-5,8],   AA:[2,14],   A:[10,28],   BAA:[38,70]},
+    water:   {AAA:[0,10],   AA:[5,18],   A:[15,30]},
+    hospital:{AA:[5,25],    A:[15,40]},
+    univ:    {AAA:[0,10],   AA:[8,22],   A:[18,35]},
+    toll:    {AA:[5,20],    A:[15,32]},
+    airportAMT:{AA:[20,50], A:[30,65]},
+    salesTax:{AA:[5,18],    A:[14,28]},
+  };
+
+  const SECTORS=[
+    {key:'go',        label:'GO',          tiers:['AAA','AA','A','BAA']},
+    {key:'water',     label:'Water',       tiers:['AAA','AA','A']},
+    {key:'hospital',  label:'Hospital',    tiers:['AA','A']},
+    {key:'univ',      label:'Higher Ed',   tiers:['AAA','AA','A']},
+    {key:'toll',      label:'Transport',   tiers:['AA','A']},
+    {key:'airportAMT',label:'Airport AMT', tiers:['AA','A']},
+    {key:'salesTax',  label:'Sales Tax',   tiers:['AA','A']},
+  ];
+
+  // Build lookup: sector -> rating tier -> maturity bucket -> [spreads]
+  const data={};
+  for(const t of bulkTrades){
+    if(!t.yield||!t.matYear)continue;
+    if(!t.cpn||t.cpn<4.5)continue;
+    const mmdVal=getMMD(t.matYear);
+    if(mmdVal==null)continue;
+    const spread=Math.round((t.yield-mmdVal)*100);
+    if(spread<-50||spread>400)continue;
+    const tenor=t.matYear-curYear;
+    if(tenor<1||tenor>30)continue;
+
+    // Detect sector from desc/cusip
+    const desc=(t.desc||'').toUpperCase();
+    const cusip=t.cusip||'';
+    let sector=null;
+    if(isGasPrepayBond(cusip,desc))sector='gasPrepay';
+    else if(/HSG|HOUSING|MORTGAGE|HFA/.test(desc))sector='housing';
+    else if(/HOSP|HLTH|HEALTH|MEDICAL|HEALTHCARE/.test(desc))sector='hospital';
+    else if(/UNIV|COLLEGE|UNIVERSITY|HIGHER ED|DORM|STUDENT/.test(desc))sector='univ';
+    else if(/WATER|WTR|SEWER|SWR|WASTEWATER/.test(desc))sector='water';
+    else if(/TOLL|TURNPIKE|HIGHWAY|TRANS AUTH|BRIDGE|TUNNEL/.test(desc))sector='toll';
+    else if(/AIRPORT|AIR AUTH|AVIATION/.test(desc))sector='airportAMT';
+    else if(/SALES TAX|SALES TX|EXCISE|UTILITY REV|UTILITY BD/.test(desc))sector='salesTax';
+    else if(/GO|GEN OBL|GENERAL OBL|ISD|USD|SCHOOL|SCH DIST|CNTY|CITY OF|TOWN OF|BOROUGH/.test(desc))sector='go';
+    if(!sector)continue;
+
+    // Detect rating tier
+    const rtg=(t.rating||'').split('/')[0].trim();
+    let tier=null;
+    for(const[tk,vals]of Object.entries(RATING_TIERS)){if(vals.includes(rtg)){tier=tk;break;}}
+    if(!tier)continue;
+
+    // Bucket
+    const bucket=BUCKETS.find(b=>tenor>b.min&&tenor<=b.max+1);
+    if(!bucket)continue;
+
+    if(!data[sector])data[sector]={};
+    if(!data[sector][tier])data[sector][tier]={};
+    if(!data[sector][tier][bucket.label])data[sector][tier][bucket.label]=[];
+    data[sector][tier][bucket.label].push(spread);
+  }
+
+  // Stats
+  const ws=bonds.filter(b=>b.spread!=null);
+  const todayAvg=ws.length?Math.round(ws.reduce((a,b)=>a+b.spread,0)/ws.length):null;
+  const histSpreads=bulkTrades.filter(t=>t.yield&&t.matYear).map(t=>{const m=getMMD(t.matYear);return m!=null?Math.round((t.yield-m)*100):null;}).filter(s=>s!=null&&s>-50&&s<300);
+  const histAvg=histSpreads.length?Math.round(histSpreads.reduce((a,s)=>a+s,0)/histSpreads.length):null;
+  const diff=todayAvg!=null&&histAvg!=null?todayAvg-histAvg:null;
+
+  const cell=(sectorKey,tier,bucket)=>{
+    const band=(TIER_BANDS[sectorKey]||{})[tier]||[-999,999];
+    const vals=data[sectorKey]?.[tier]?.[bucket];
+    if(!vals||vals.length<3)return`<td style="text-align:center;color:#4a7fa5;font-size:11px;">—</td>`;
+    const avg=Math.round(vals.reduce((a,v)=>a+v,0)/vals.length);
+    let bg,color;
+    if(avg>band[1]){bg='#EAF3DE';color='#27500A';}
+    else if(avg<band[0]){bg='#FCEBEB';color='#791F1F';}
+    else{bg='#FAEEDA';color='#633806';}
+    return`<td style="text-align:center;padding:5px 8px;"><span style="background:${bg};color:${color};border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700;display:inline-block;">${avg>0?'+':''}${avg}</span><span style="display:block;font-size:9px;color:#4a7fa5;margin-top:1px;">${vals.length} trades</span></td>`;
+  };
+
+  let html=`
+  <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+    ${todayAvg!=null?`<div style="background:#0d1f3c;border-radius:6px;padding:9px 14px;"><div style="font-size:18px;font-weight:700;color:${todayAvg>0?'#4ade80':'#f87171'};">${todayAvg>0?'+':''}${todayAvg}</div><div style="font-size:10px;color:#4a7fa5;">Today avg spread</div></div>`:''}
+    ${histAvg!=null?`<div style="background:#0d1f3c;border-radius:6px;padding:9px 14px;"><div style="font-size:18px;font-weight:700;color:#38bdf8;">${histAvg>0?'+':''}${histAvg}</div><div style="font-size:10px;color:#4a7fa5;">Hist avg spread</div></div>`:''}
+    ${diff!=null?`<div style="background:#0d1f3c;border-radius:6px;padding:9px 14px;"><div style="font-size:18px;font-weight:700;color:${diff>0?'#4ade80':'#f87171'};">${diff>0?'+':''}${diff}bps ${diff>0?'wide':'tight'}</div><div style="font-size:10px;color:#4a7fa5;">vs history</div></div>`:''}
+    <div style="background:#0d1f3c;border-radius:6px;padding:9px 14px;"><div style="font-size:18px;font-weight:700;color:#f59e0b;">${bulkTrades.length.toLocaleString()}</div><div style="font-size:10px;color:#4a7fa5;">comp trades</div></div>
+  </div>
+  <div style="display:flex;gap:12px;margin-bottom:10px;font-size:10px;color:#4a7fa5;flex-wrap:wrap;">
+    <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#97C459;margin-right:3px;vertical-align:middle;"></span>Cheap vs band</span>
+    <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#E24B4A;margin-right:3px;vertical-align:middle;"></span>Rich vs band</span>
+    <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#EF9F27;margin-right:3px;vertical-align:middle;"></span>Fair</span>
+    <span style="margin-left:4px;">Cell = avg spread to MMD · min 3 trades</span>
+  </div>
+  <div style="overflow-x:auto;">
+  <table style="width:100%;border-collapse:collapse;font-size:12px;">
+    <thead><tr style="border-bottom:1px solid #1e3a5f;">
+      <th style="text-align:left;padding:7px 8px;font-size:10px;color:#4a7fa5;min-width:130px;">Sector / Rating</th>
+      ${BUCKETS.map(b=>`<th style="text-align:center;padding:7px 8px;font-size:10px;color:#4a7fa5;">${b.label}</th>`).join('')}
+      <th style="text-align:center;padding:7px 8px;font-size:10px;color:#4a7fa5;">Band</th>
+    </tr></thead>
+    <tbody>`;
+
+  for(const sec of SECTORS){
+    html+=`<tr><td colspan="${BUCKETS.length+2}" style="background:#0a1628;font-size:10px;font-weight:700;color:#f59e0b;letter-spacing:1px;padding:4px 8px;border-bottom:1px solid #1e3a5f;">${sec.label}</td></tr>`;
+    for(const tier of sec.tiers){
+      const hasAny=BUCKETS.some(b=>(data[sec.key]?.[tier]?.[b.label]||[]).length>=3);
+      if(!hasAny)continue;
+      const band=(TIER_BANDS[sec.key]||{})[tier];
+      const bandStr=band?`${band[0]>0?'+':''}${band[0]}/${band[1]>0?'+':''}${band[1]}`:'—';
+      html+=`<tr style="border-bottom:0.5px solid #1e3a5f;">
+        <td style="padding:5px 8px;font-size:11px;color:#c9d8e8;">${sec.label} — ${tier}</td>
+        ${BUCKETS.map(b=>cell(sec.key,tier,b.label)).join('')}
+        <td style="text-align:center;font-size:10px;color:#4a7fa5;">${bandStr}</td>
+      </tr>`;
+    }
+  }
+
+  html+=`</tbody></table></div>
+  <div style="margin-top:10px;font-size:10px;color:#1e3a5f;">4.5%+ coupon bonds only · Last updated: ${new Date().toLocaleTimeString()}</div>`;
+
+  container.innerHTML=html;
+}
+
 function switchTab(id,el){
   document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
   document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
   document.getElementById("tab-"+id).classList.add("active");
   if(el)el.classList.add("active");
   if(id==='bestideas')renderBestIdeas();
+  if(id==='sectors')renderSectorMatrix();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
