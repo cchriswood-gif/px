@@ -1495,17 +1495,17 @@ function importSnapshot(e){
     try{
       const d=JSON.parse(ev.target.result);
       if(!d.bonds&&!d.bulkTrades&&!d.mmd)throw new Error('Invalid snapshot');
-      if(d.bonds){bonds=d.bonds;localStorage.setItem('px-bonds',JSON.stringify(bonds));}
-      if(d.bulkTrades){bulkTrades=d.bulkTrades;}
-      if(d.mmd){Object.assign(mmd,d.mmd);renderMMDGrid();}
-      if(d.mmdDate){mmdDate=d.mmdDate;}
-      if(d.bvalCurves){bvalCurves=d.bvalCurves;bvalDate=d.bvalDate||null;}
-      if(d.cusipRatingCache){Object.assign(cusipRatingCache,d.cusipRatingCache);localStorage.setItem('px-cusip-ratings',JSON.stringify(cusipRatingCache));}
-      if(d.issuerRatings&&d.issuerRatings.length){issuerRatings=d.issuerRatings;localStorage.setItem('projectx-ratings',JSON.stringify(issuerRatings));renderRatingTable();}
-      if(d.inquiryProfiles){inquiryProfiles=d.inquiryProfiles;saveInquiryProfiles();renderInquiryProfiles();}
-      recalcAll();
-      updateCompSummary();
-      msg.textContent=`✓ Snapshot loaded — ${bonds.length} bonds, ${bulkTrades.length} comps, ${Object.keys(cusipRatingCache).length} ratings`;
+      try{if(d.bonds){bonds=d.bonds;localStorage.setItem('px-bonds',JSON.stringify(bonds));}}catch(e){console.warn('bonds import err',e);}
+      try{if(d.bulkTrades){bulkTrades=d.bulkTrades;}}catch(e){console.warn('bulkTrades import err',e);}
+      try{if(d.mmd){Object.assign(mmd,d.mmd);renderMMDGrid();}}catch(e){console.warn('mmd import err',e);}
+      try{if(d.mmdDate){mmdDate=d.mmdDate;}}catch(e){}
+      try{if(d.bvalCurves){bvalCurves=d.bvalCurves;bvalDate=d.bvalDate||null;}}catch(e){console.warn('bval import err',e);}
+      try{if(d.cusipRatingCache){Object.assign(cusipRatingCache,d.cusipRatingCache);localStorage.setItem('px-cusip-ratings',JSON.stringify(cusipRatingCache));}}catch(e){console.warn('rating cache import err',e);}
+      try{if(d.issuerRatings&&d.issuerRatings.length){issuerRatings=d.issuerRatings;localStorage.setItem('projectx-ratings',JSON.stringify(issuerRatings));renderRatingTable();}}catch(e){console.warn('issuerRatings import err',e);}
+      try{if(d.inquiryProfiles){inquiryProfiles=d.inquiryProfiles;saveInquiryProfiles();renderInquiryProfiles();}}catch(e){console.warn('inquiryProfiles import err',e);}
+      try{recalcAll();}catch(e){console.warn('recalc import err',e);}
+      try{updateCompSummary();}catch(e){}
+      msg.textContent=`✓ Snapshot loaded — ${(d.bonds||[]).length} bonds, ${(d.bulkTrades||[]).length} comps, ${Object.keys(d.cusipRatingCache||{}).length} ratings`;
       msg.style.color='#4ade80';msg.style.display='block';
       setTimeout(()=>msg.style.display='none',6000);
     }catch(err){
