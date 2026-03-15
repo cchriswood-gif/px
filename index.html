@@ -483,7 +483,7 @@
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
       <button onclick="exportSnapshot()" style="padding:7px 18px;background:#1e3a5f;color:#4ade80;border:1px solid #4ade80;border-radius:4px;cursor:pointer;font-size:11px;letter-spacing:1px;">⬇ EXPORT FULL SNAPSHOT</button>
       <button onclick="document.getElementById('snapshot-import-file').click()" style="padding:7px 18px;background:#1e3a5f;color:#f59e0b;border:1px solid #f59e0b;border-radius:4px;cursor:pointer;font-size:11px;letter-spacing:1px;">⬆ IMPORT FULL SNAPSHOT</button>
-      <input type="file" id="snapshot-import-file" accept=".json" style="display:none;" onchange="importSnapshot(event)">
+      <input type="file" id="snapshot-import-file" accept=".json,application/json,text/plain" style="display:none;" onchange="importSnapshot(event)">
     </div>
     <div id="snapshot-msg" style="font-size:11px;color:#4ade80;margin-top:6px;display:none;"></div>
   </div>
@@ -1494,7 +1494,7 @@ function importSnapshot(e){
   reader.onload=ev=>{
     try{
       const d=JSON.parse(ev.target.result);
-      if(!d.version)throw new Error('Invalid snapshot');
+      if(!d.bonds&&!d.bulkTrades&&!d.mmd)throw new Error('Invalid snapshot');
       if(d.bonds){bonds=d.bonds;localStorage.setItem('px-bonds',JSON.stringify(bonds));}
       if(d.bulkTrades){bulkTrades=d.bulkTrades;}
       if(d.mmd){Object.assign(mmd,d.mmd);renderMMDGrid();}
@@ -3961,7 +3961,7 @@ function exportBestIdeas(){
     if(compDiff<compThreshold)continue;
     const bv=getBvalSignal(b);
     if(!bv||bv.label!=='CHEAP')continue;
-    ideas.push({...b,compDiff,compCount:comps.length});
+    ideas.push({...b,compDiff:Math.min(compDiff,99),compCount:comps.length});
   }
   if(!ideas.length){alert('No Best Ideas to export');return;}
   ideas.sort((a,b)=>a.matYear-b.matYear);
@@ -4025,7 +4025,7 @@ function renderBestIdeas(){
       if(bv&&(bv.label!=='CHEAP'||bv.diff<1))continue; // require label=CHEAP to BVAL
       // if bv===null (no curve for this sector) — allow through (no signal = no disqualifier)
     }
-    ideas.push({...b,compDiff,compCount:comps.length});
+    ideas.push({...b,compDiff:Math.min(compDiff,99),compCount:comps.length});
   }
 
   // Sort by compDiff descending (most cheap first)
@@ -4370,7 +4370,7 @@ function generateEOD(){
     if(compDiff<20)continue;
     const bv=getBvalSignal(b);
     if(!bv||bv.label!=='CHEAP')continue;
-    ideas.push({...b,compDiff,compCount:comps.comps.length});
+    ideas.push({...b,compDiff:Math.min(compDiff,99),compCount:comps.comps.length});
   }
   ideas.sort((a,b)=>a.matYear-b.matYear);
   const topIdeas=ideas.slice(0,8);
