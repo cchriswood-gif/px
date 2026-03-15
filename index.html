@@ -960,6 +960,17 @@ function applyBval() {
   const parsed = {};
   let date = null;
 
+  // Direct Bloomberg ticker → curve key mapping
+  const TICKER_MAP={
+    'BVSC1212':'go_AA',
+    'BVSC1213':'go_A',
+    'BVSC1287':'water_AA',
+    'BVSC1338':'airport_A',
+    'BVSC1339':'hosp_A',
+    'BVSC1347':'univ_AA',
+    'YCGT0493':'go_AAA',
+  };
+
   // Sector name → Project X curve key mapping
   const SECTOR_MAP={
     'GO — AA':'go_AA','GO—AA':'go_AA','GO AA':'go_AA','GOAA':'go_AA',
@@ -976,36 +987,71 @@ function applyBval() {
     if(trimmed.startsWith('Date:')) { date = trimmed.replace('Date:','').trim(); continue; }
     if(trimmed.startsWith('===')) continue;
 
-    // Try Bloomberg screen format: "GO — AA\tBVSC1212 Index\t1y 2.380\t\t3y 2.431..."
+    // Try Bloomberg screen format — check ticker in first or second column
     const tabs=trimmed.split('\t').map(s=>s.trim()).filter(s=>s);
-    if(tabs.length>=2){
-      // Find sector key from first column
-      const sectorRaw=tabs[0].toUpperCase();
-      const curveKey=SECTOR_MAP[sectorRaw]||null;
-      if(curveKey){
-        // Skip "Data Unavailable"
+    if(tabs.length>=1){
+      // Check if first token is a known ticker (e.g. "BVSC1212" or "BVSC1212 Index")
+      const firstToken=tabs[0].replace(' Index','').trim().toUpperCase();
+      const tickerKey=TICKER_MAP[firstToken];
+      if(tickerKey){
         if(trimmed.toUpperCase().includes('DATA UNAVAILABLE')){
-          console.log(`BVAL skip (no data): ${tabs[0]}`);
-          continue;
+          console.log(`BVAL skip (no data): ${tabs[0]}`);continue;
         }
-        // Parse tenor/rate pairs: "1y 2.380" "3y 2.431" etc
         const curve={};
         const tenorRe=/(\d+)y\s+([\d.]+)/gi;
         let m;
         while((m=tenorRe.exec(trimmed))!==null){
           const tenor=parseInt(m[1]);
           const rate=parseFloat(m[2]);
-          if(tenor>=1&&tenor<=30&&rate>0&&rate<10) curve[tenor]=rate;
+          if(tenor>=1&&tenor<=30&&rate>0&&rate<10)curve[tenor]=rate;
         }
         if(Object.keys(curve).length){
-          parsed[curveKey]=curve;
-          // Also populate adjacent rating tiers for fallback
-          if(curveKey==='go_AA'){parsed['go_AAp']=curve;parsed['go_AAm']=curve;}
-          if(curveKey==='go_A'){parsed['go_Ap']=curve;parsed['go_Am']=curve;}
-          if(curveKey==='hosp_A'){parsed['hosp_Ap']=curve;parsed['hosp_Am']=curve;}
-          if(curveKey==='water_AA'){parsed['water_AAp']=curve;parsed['water_AAm']=curve;}
-          if(curveKey==='univ_AA'){parsed['univ_AAp']=curve;parsed['univ_AAm']=curve;}
+          parsed[tickerKey]=curve;
+          if(tickerKey==='go_AA'){parsed['go_AAp']=curve;parsed['go_AAm']=curve;}
+          if(tickerKey==='go_A'){parsed['go_Ap']=curve;parsed['go_Am']=curve;}
+          if(tickerKey==='hosp_A'){parsed['hosp_Ap']=curve;parsed['hosp_Am']=curve;}
+          if(tickerKey==='water_AA'){parsed['water_AAp']=curve;parsed['water_AAm']=curve;}
+          if(tickerKey==='univ_AA'){parsed['univ_AAp']=curve;parsed['univ_AAm']=curve;}
+          if(tickerKey==='airport_A'){parsed['airport_Ap']=curve;parsed['airportAMT_AA']=curve;}
         }
+        continue;
+      }
+      // Check second token for ticker (when sector label is first)
+      if(tabs.length>=2){
+        const secondToken=tabs[1].replace(' Index','').trim().toUpperCase();
+        const tickerKey2=TICKER_MAP[secondToken];
+        if(tickerKey2){
+          if(trimmed.toUpperCase().includes('DATA UNAVAILABLE')){continue;}
+          const curve={};
+          const tenorRe=/(\d+)y\s+([\d.]+)/gi;
+          let m;
+          while((m=tenorRe.exec(trimmed))!==null){
+            const tenor=parseInt(m[1]);
+            const rate=parseFloat(m[2]);
+            if(tenor>=1&&tenor<=30&&rate>0&&rate<10)curve[tenor]=rate;
+          }
+          if(Object.keys(curve).length){
+            parsed[tickerKey2]=curve;
+            if(tickerKey2==='go_AA'){parsed['go_AAp']=curve;parsed['go_AAm']=curve;}
+            if(tickerKey2==='go_A'){parsed['go_Ap']=curve;parsed['go_Am']=curve;}
+          }
+          continue;
+        }
+      }
+      // Check sector name
+      const sectorRaw=tabs[0].toUpperCase();
+      const curveKey=SECTOR_MAP[sectorRaw]||null;
+      if(curveKey){
+        if(trimmed.toUpperCase().includes('DATA UNAVAILABLE')){continue;}
+        const curve={};
+        const tenorRe=/(\d+)y\s+([\d.]+)/gi;
+        let m;
+        while((m=tenorRe.exec(trimmed))!==null){
+          const tenor=parseInt(m[1]);
+          const rate=parseFloat(m[2]);
+          if(tenor>=1&&tenor<=30&&rate>0&&rate<10)curve[tenor]=rate;
+        }
+        if(Object.keys(curve).length)parsed[curveKey]=curve;
         continue;
       }
     }
