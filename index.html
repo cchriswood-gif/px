@@ -1816,7 +1816,10 @@ function renderCompSummary(){
   // Mat year distribution
   const matDist={};
   bulkTrades.forEach(t=>{if(t.matYear){const d=Math.floor(t.matYear/5)*5;matDist[d]=(matDist[d]||0)+1;}});
-  document.getElementById('comp-summary').style.display='block';
+  const el=document.getElementById('comp-summary');
+  if(el)el.style.display='block';
+  const elContent=document.getElementById('comp-summary-content');
+  if(!elContent)return;
   document.getElementById('comp-summary-content').innerHTML=`
     <div class="loaded-row"><span style="color:#c9d8f0">Source</span><span style="color:#f59e0b">${bulkTradeDate}</span></div>
     <div class="loaded-row"><span style="color:#c9d8f0">Total Trades</span><span style="color:#38bdf8;font-weight:700">${bulkTrades.length.toLocaleString()}</span></div>
